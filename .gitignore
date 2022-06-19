@@ -2,3 +2,6 @@
 dist/
 build/
 .openzeppelin/
+out/
+cache/
+lib/
