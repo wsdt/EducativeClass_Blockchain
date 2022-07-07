@@ -19,6 +19,8 @@ contract WavectTest is Test {
     address constant OTHER_2 = address(4);
     bytes32[] OTHER_PROOF_2;
 
+    bytes32[] FAULTY_PROOF;
+
     bytes32 MERKLE_ROOT = 0x5071e19149cc9b870c816e671bc5db717d1d99185c17b082af957a0a93888dd9;
 
     function setUp() public {
@@ -30,6 +32,7 @@ contract WavectTest is Test {
         OTHER_PROOF.push(0xf95c14e6953c95195639e8266ab1a6850864d59a829da9f9b13602ee522f672b);
         OTHER_PROOF_2.push(0x5b70e80538acdabd6137353b0f9d8d149f4dba91e8be2e7946e409bfdbe685b9);
         OTHER_PROOF_2.push(0xf95c14e6953c95195639e8266ab1a6850864d59a829da9f9b13602ee522f672b);
+        FAULTY_PROOF.push(bytes32(0x00));
 
         vm.prank(OWNER);
         wavect = new Wavect("https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "Wavect",
@@ -282,7 +285,8 @@ contract WavectTest is Test {
 
         wavect = new Wavect("https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "Wavect",
             "This NFT can be used to vote on podcast guests, topics and many other things. We also plan to release products in the near future, this NFT will give you then either a lifelong rebate or even allows you to use our products for free.",
-            "https://wavect.io?nft=true", "https://wavect.io/official-nft/wavect_video.mp4", 2, MERKLE_ROOT); // for custom supply
+            "https://wavect.io?nft=true", "https://wavect.io/official-nft/wavect_video.mp4", 2, MERKLE_ROOT);
+        // for custom supply
 
         assertEq(wavect.totalSupply(), 2, "Invalid total supply (2)");
         wavect.mint(OWNER_PROOF);
@@ -328,6 +332,23 @@ contract WavectTest is Test {
         vm.prank(OWNER);
         wavect.setReveal(true);
         string memory onchainMetadataRevealed = wavect.tokenURI(0);
-        assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataRevealed))); // must be different
+        assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataRevealed)));
+        // must be different
+    }
+
+    function testWhitelist() public {
+        assertEq(wavect.balanceOf(OTHER_2), 0);
+        vm.prank(OTHER_2);
+        wavect.mint(OTHER_PROOF_2);
+        assertEq(wavect.balanceOf(OTHER_2), 1);
+
+        vm.startPrank(OWNER);
+        vm.expectRevert("Invalid proof");
+        wavect.mint(FAULTY_PROOF);
+        wavect.setPublicSale(true);
+        wavect.mint(FAULTY_PROOF);
+        vm.expectRevert("Already minted");
+        wavect.mint(FAULTY_PROOF);
+        vm.stopPrank();
     }
 }
