@@ -30,6 +30,7 @@ abstract contract AddLimitedSupply is Ownable {
     /// @dev Will only be used in conjunction after the community has voted to allow the community to grow larger.
     function setTotalSupply(uint256 totalSupply_) external onlyOwner {
         require(!supplyFrozen, "Supply frozen");
+        require(totalSupply_ > _totalSupply, "Cannot be smaller");
         _totalSupply = totalSupply_;
     }
     /// @dev In case we want to keep ownership, but community really wants to remove the possibility of increasing the supply.

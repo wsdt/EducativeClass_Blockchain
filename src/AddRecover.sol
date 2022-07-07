@@ -16,4 +16,8 @@ contract AddRecover is Ownable {
     function recoverERC721(address tokenAddress, uint256 tokenId_) external onlyOwner {
         IERC721(tokenAddress).transferFrom(address(this), owner(), tokenId_);
     }
+
+    function recoverGas(uint256 amount) external onlyOwner {
+        address(this).transfer(amount);
+    }
 }
