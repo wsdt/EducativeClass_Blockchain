@@ -7,15 +7,28 @@ import "forge-std/console2.sol";
 
 contract WavectTest is Test {
     Wavect wavect;
-    address OWNER = address(1);
-    address NONOWNER = address(2);
-    address OTHER= address(3);
+    address constant OWNER = address(1);
+    bytes32[] OWNER_PROOF;
+
+    address constant NONOWNER = address(2);
+    bytes32[] NONOWNER_PROOF;
+
+    address constant OTHER= address(3);
+    bytes32[] OTHER_PROOF;
+
+    bytes32 MERKLE_ROOT = 0x344510bd0c324c3912b13373e89df42d1b50450e9764a454b2aa6e2968a4578a;
 
     function setUp() public {
+        OWNER_PROOF.push(0xd52688a8f926c816ca1e079067caba944f158e764817b83fc43594370ca9cf62);
+        OWNER_PROOF.push(0x5b70e80538acdabd6137353b0f9d8d149f4dba91e8be2e7946e409bfdbe685b9);
+        NONOWNER_PROOF.push(0x1468288056310c82aa4c01a7e12a10f8111a0560e72b700555479031b86c357d);
+        NONOWNER_PROOF.push(0x5b70e80538acdabd6137353b0f9d8d149f4dba91e8be2e7946e409bfdbe685b9);
+        OTHER_PROOF.push(0xf95c14e6953c95195639e8266ab1a6850864d59a829da9f9b13602ee522f672b);
+
         vm.prank(OWNER);
         wavect = new Wavect("https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "Wavect",
             "This NFT can be used to vote on podcast guests, topics and many other things. We also plan to release products in the near future, this NFT will give you then either a lifelong rebate or even allows you to use our products for free.",
-            "https://wavect.io?nft=true", "https://wavect.io/official-nft/wavect_video.mp4", 100);
+            "https://wavect.io?nft=true", "https://wavect.io/official-nft/wavect_video.mp4", 100, MERKLE_ROOT);
         vm.stopPrank();
     }
 
@@ -53,6 +66,18 @@ contract WavectTest is Test {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
         wavect.setMetadataDescr("....");
+    }
+
+    function testNonOwnerSetPublicSale() public {
+        vm.expectRevert("Ownable: caller is not the owner");
+        vm.prank(NONOWNER);
+        wavect.setPublicSale(true);
+    }
+
+    function testNonOwnerSetMerkleRoot() public {
+        vm.expectRevert("Ownable: caller is not the owner");
+        vm.prank(NONOWNER);
+        wavect.setMerkleRoot("");
     }
 
     function testNonOwnerSetMetadataExtLink() public {
@@ -101,6 +126,18 @@ contract WavectTest is Test {
         vm.prank(OWNER);
         wavect.setReveal(false);
         assertEq(wavect.revealed(), false);
+    }
+
+    function testOwnerSetPublicSale() public {
+        vm.prank(OWNER);
+        wavect.setPublicSale(true);
+        assertEq(wavect.publicSaleEnabled(), true);
+    }
+
+    function testOwnerSetMerkleRoot() public {
+        vm.prank(OWNER);
+        wavect.setMerkleRoot("");
+        assertEq(wavect.merkleRoot(), "");
     }
 
     function testOwnerSetMetadataName() public {
@@ -154,11 +191,11 @@ contract WavectTest is Test {
     function testNonOwnerMint() public {
         assertEq(wavect.balanceOf(NONOWNER), 0);
         vm.startPrank(NONOWNER);
-        wavect.mint();
+        wavect.mint(NONOWNER_PROOF);
         assertEq(wavect.balanceOf(NONOWNER), 1);
         assertEq(wavect.ownerOf(0), NONOWNER);
         vm.expectRevert("Already minted");
-        wavect.mint();
+        wavect.mint(NONOWNER_PROOF);
         vm.stopPrank();
         // used startPrank
     }
@@ -166,18 +203,18 @@ contract WavectTest is Test {
     function testOwnerMint() public {
         assertEq(wavect.balanceOf(OWNER), 0);
         vm.startPrank(OWNER);
-        wavect.mint();
+        wavect.mint(OWNER_PROOF);
         assertEq(wavect.balanceOf(OWNER), 1);
         assertEq(wavect.ownerOf(0), OWNER);
         vm.expectRevert("Already minted");
-        wavect.mint();
+        wavect.mint(OWNER_PROOF);
         vm.stopPrank();
         // used startPrank
     }
 
     function testOwnerIncreaseRank() public {
         vm.prank(NONOWNER);
-        wavect.mint();
+        wavect.mint(NONOWNER_PROOF);
         assertEq(wavect.balanceOf(NONOWNER), 1);
 
         vm.startPrank(OWNER);
@@ -191,7 +228,7 @@ contract WavectTest is Test {
 
     function testOwnerDecreaseRank() public {
         vm.prank(NONOWNER);
-        wavect.mint();
+        wavect.mint(NONOWNER_PROOF);
         assertEq(wavect.balanceOf(NONOWNER), 1, "Mint failed");
         vm.startPrank(OWNER);
         assertEq(wavect.rank(0), 0, "Initial rank wrong");
@@ -205,7 +242,7 @@ contract WavectTest is Test {
 
     function testOwnerResetRank() public {
         vm.prank(NONOWNER);
-        wavect.mint();
+        wavect.mint(NONOWNER_PROOF);
         assertEq(wavect.balanceOf(NONOWNER), 1);
         vm.startPrank(OWNER);
         assertEq(wavect.rank(0), 0);
@@ -227,20 +264,20 @@ contract WavectTest is Test {
 
         wavect = new Wavect("https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "Wavect",
             "This NFT can be used to vote on podcast guests, topics and many other things. We also plan to release products in the near future, this NFT will give you then either a lifelong rebate or even allows you to use our products for free.",
-            "https://wavect.io?nft=true", "https://wavect.io/official-nft/wavect_video.mp4", 2); // for custom supply
+            "https://wavect.io?nft=true", "https://wavect.io/official-nft/wavect_video.mp4", 2, MERKLE_ROOT); // for custom supply
 
         assertEq(wavect.totalSupply(), 2, "Invalid total supply (2)");
-        wavect.mint();
+        wavect.mint(OWNER_PROOF);
         assertEq(wavect.balanceOf(OWNER), 1);
         assertEq(wavect.ownerOf(0), OWNER);
         vm.stopPrank();
         vm.prank(NONOWNER);
-        wavect.mint();
+        wavect.mint(NONOWNER_PROOF);
         assertEq(wavect.balanceOf(NONOWNER), 1);
         assertEq(wavect.ownerOf(1), NONOWNER);
         vm.expectRevert("No more tokens available");
         vm.prank(OTHER);
-        wavect.mint();
+        wavect.mint(OTHER_PROOF);
         assertEq(wavect.balanceOf(OTHER), 0);
 
         vm.startPrank(OWNER);
@@ -250,18 +287,18 @@ contract WavectTest is Test {
         wavect.setTotalSupply(100);
         vm.stopPrank();
         vm.prank(OTHER);
-        wavect.mint();
+        wavect.mint(OTHER_PROOF);
         assertEq(wavect.balanceOf(OTHER), 1);
         assertEq(wavect.ownerOf(2), OTHER);
         vm.expectRevert("No more tokens available");
         vm.prank(address(98));
-        wavect.mint();
+        wavect.mint(OTHER_PROOF);
     }
 
     function testMetadata() public {
         assertEq(wavect.balanceOf(NONOWNER), 0);
         vm.prank(NONOWNER);
-        wavect.mint();
+        wavect.mint(NONOWNER_PROOF);
         assertEq(wavect.balanceOf(NONOWNER), 1);
         assertEq(wavect.ownerOf(0), NONOWNER);
 

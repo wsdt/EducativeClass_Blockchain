@@ -4,6 +4,7 @@ pragma solidity ^0.8.9;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
+import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "base64-sol/base64.sol";
 import "./AddRecover.sol";
 import "./LinearlyAssigned.sol";
@@ -23,12 +24,15 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
     string public metadataAnimationUrl;
 
     bool public revealed;
+    bool public publicSaleEnabled;
+
+    bytes32 public merkleRoot;
 
     /// @dev Used to specifically reward active community members, etc.
     mapping(uint256 => uint256) public rank;
 
     constructor(string memory contractURI_, string memory baseURI_, string memory metadataName_, string memory metadataDescr_,
-        string memory metadataExtLink_, string memory metadataAnimationUrl_, uint256 totalSupply_)
+        string memory metadataExtLink_, string memory metadataAnimationUrl_, uint256 totalSupply_, bytes32 merkleRoot_)
     ERC721("Wavect", "WACT")
     LinearlyAssigned(totalSupply_, 0)
     {
@@ -39,11 +43,15 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
         metadataName = metadataName_;
         metadataExtLink = metadataExtLink_;
         metadataAnimationUrl = metadataAnimationUrl_;
+        merkleRoot = merkleRoot_;
     }
 
-    // TODO: Add merkle proof
-    function mint() external {
+    function mint(bytes32[] calldata _merkleProof) external {
         require(balanceOf(_msgSender()) < maxWallet, "Already minted");
+        if (!publicSaleEnabled) {
+            bytes32 leaf = keccak256(abi.encodePacked(_msgSender()));
+            require(MerkleProof.verify(_merkleProof, merkleRoot, leaf), "Invalid proof");
+        }
         _mint(_msgSender(), nextToken());
     }
 
@@ -100,6 +108,14 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
 
     function setContractURI(string calldata contractURI_) external onlyOwner() {
         _contractURI = contractURI_;
+    }
+
+    function setPublicSale(bool publicSale_) external onlyOwner {
+        publicSaleEnabled = publicSale_;
+    }
+
+    function setMerkleRoot(bytes32 merkleRoot_) external onlyOwner {
+        merkleRoot = merkleRoot_;
     }
 
     function setMaxWallet(uint256 maxWallet_) external onlyOwner {
