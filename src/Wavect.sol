@@ -15,7 +15,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
 
     address public metadataFeeRecipient;
 
-    string public contractURI;
+    string private _contractURI;
     string public baseURI;
     string public metadataDescr;
     string public metadataName;
@@ -25,15 +25,15 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
     bool public revealed;
 
     /// @dev Used to specifically reward active community members, etc.
-    mapping(uint256 => uint256) rank;
+    mapping(uint256 => uint256) public rank;
 
     constructor(string memory contractURI_, string memory baseURI_, string memory metadataName_, string memory metadataDescr_,
-        string memory metadataExtLink_, string memory metadataAnimationUrl_)
+        string memory metadataExtLink_, string memory metadataAnimationUrl_, uint256 totalSupply_)
     ERC721("Wavect", "WACT")
-    LinearlyAssigned(100, 0)
+    LinearlyAssigned(totalSupply_, 0)
     {
         maxWallet = 1;
-        contractURI = contractURI_;
+        _contractURI = contractURI_;
         baseURI = baseURI_;
         metadataDescr = metadataDescr_;
         metadataName = metadataName_;
@@ -41,54 +41,10 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
         metadataAnimationUrl = metadataAnimationUrl_;
     }
 
+    // TODO: Add merkle proof
     function mint() external {
         require(balanceOf(_msgSender()) < maxWallet, "Already minted");
         _mint(_msgSender(), nextToken());
-    }
-
-    function setMaxWallet(uint256 maxWallet_) external onlyOwner {
-        maxWallet = maxWallet_;
-    }
-
-    function reveal(bool reveal_) external onlyOwner {
-        revealed = reveal_;
-    }
-
-    /// @dev BaseURI is used for the image itself in this case, since the metadata itself lives on-chain
-    function setBaseURI(string memory baseURI_) external onlyOwner {
-        baseURI = baseURI_;
-    }
-
-    function setMetadataName(string memory metadataName_) external onlyOwner {
-        metadataName = metadataName_;
-    }
-
-    function setMetadataDescr(string memory metadataDescr_) external onlyOwner {
-        metadataDescr = metadataDescr_;
-    }
-
-    function setMetadataExtLink(string memory metadataExtLink_) external onlyOwner {
-        metadataExtLink = metadataExtLink_;
-    }
-
-    function setMetadataAnimationUrl(string memory metadataAnimationUrl_) external onlyOwner {
-        metadataAnimationUrl = metadataAnimationUrl_;
-    }
-
-    function _baseURI() internal view override returns (string memory) {
-        return baseURI;
-    }
-
-    function increaseRank(uint256 tokenID_) external onlyOwner {
-        rank[tokenID_]++;
-    }
-
-    function decreaseRank(uint256 tokenID_) external onlyOwner {
-        rank[tokenID_]--;
-    }
-
-    function resetRank(uint256 tokenID_) external onlyOwner {
-        rank[tokenID_] = 0;
     }
 
     function getImage(uint256 tokenId) private view returns (string memory) {
@@ -119,11 +75,59 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
         return string(abi.encodePacked('data:application/json;base64,', json));
     }
 
-    function setContractURI(string calldata contractURI_) external onlyOwner() {
-        contractURI = contractURI_;
+    function contractURI() external view returns (string memory) {
+        return _contractURI;
     }
 
-    function contractURI() external view returns (string memory) {
-        return contractURI;
+    function _baseURI() internal view override returns (string memory) {
+        return baseURI;
+    }
+
+    function increaseRank(uint256 tokenID_) external onlyOwner {
+        require(_exists(tokenID_), "Non existent");
+        rank[tokenID_] += 1;
+    }
+
+    function decreaseRank(uint256 tokenID_) external onlyOwner {
+        require(_exists(tokenID_), "Non existent");
+        rank[tokenID_] -= 1;
+    }
+
+    function resetRank(uint256 tokenID_) external onlyOwner {
+        require(_exists(tokenID_), "Non existent");
+        rank[tokenID_] = 0;
+    }
+
+    function setContractURI(string calldata contractURI_) external onlyOwner() {
+        _contractURI = contractURI_;
+    }
+
+    function setMaxWallet(uint256 maxWallet_) external onlyOwner {
+        maxWallet = maxWallet_;
+    }
+
+    function setReveal(bool reveal_) external onlyOwner {
+        revealed = reveal_;
+    }
+
+    /// @dev BaseURI is used for the image itself in this case, since the metadata itself lives on-chain
+    function setBaseURI(string memory baseURI_) external onlyOwner {
+        baseURI = baseURI_;
+    }
+
+    function setMetadataName(string memory metadataName_) external onlyOwner {
+        metadataName = metadataName_;
+    }
+
+    function setMetadataDescr(string memory metadataDescr_) external onlyOwner {
+        metadataDescr = metadataDescr_;
+    }
+
+    function setMetadataExtLink(string memory metadataExtLink_) external onlyOwner {
+        metadataExtLink = metadataExtLink_;
+    }
+
+    function setMetadataAnimationUrl(string memory metadataAnimationUrl_) external onlyOwner {
+        metadataAnimationUrl = metadataAnimationUrl_;
     }
 }
