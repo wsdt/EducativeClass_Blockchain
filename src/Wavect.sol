@@ -10,21 +10,35 @@ import "./LinearlyAssigned.sol";
 
 contract Wavect is ERC721, LinearlyAssigned, AddRecover {
 
-    string public baseURI;
     uint256 public maxWallet;
-    string private _metadataDescr;
-    string private _metadataName;
+    uint256 public metadataSellerFeeBps;
+
+    address public metadataFeeRecipient;
+
+    string public contractURI;
+    string public baseURI;
+    string public metadataDescr;
+    string public metadataName;
+    string public metadataExtLink;
+    string public metadataAnimationUrl;
+
     bool public revealed;
 
     /// @dev Used to specifically reward active community members, etc.
     mapping(uint256 => uint256) rank;
 
-    constructor(string memory baseURI_)
-        ERC721("Wavect", "WACT")
-        LinearlyAssigned(100, 0)
+    constructor(string memory contractURI_, string memory baseURI_, string memory metadataName_, string memory metadataDescr_,
+        string memory metadataExtLink_, string memory metadataAnimationUrl_)
+    ERC721("Wavect", "WACT")
+    LinearlyAssigned(100, 0)
     {
         maxWallet = 1;
+        contractURI = contractURI_;
         baseURI = baseURI_;
+        metadataDescr = metadataDescr_;
+        metadataName = metadataName_;
+        metadataExtLink = metadataExtLink_;
+        metadataAnimationUrl = metadataAnimationUrl_;
     }
 
     function mint() external {
@@ -35,6 +49,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
     function setMaxWallet(uint256 maxWallet_) external onlyOwner {
         maxWallet = maxWallet_;
     }
+
     function reveal(bool reveal_) external onlyOwner {
         revealed = reveal_;
     }
@@ -43,48 +58,72 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
     function setBaseURI(string memory baseURI_) external onlyOwner {
         baseURI = baseURI_;
     }
+
     function setMetadataName(string memory metadataName_) external onlyOwner {
-        _metadataName = metadataName_;
+        metadataName = metadataName_;
     }
+
     function setMetadataDescr(string memory metadataDescr_) external onlyOwner {
-        _metadataDescr = metadataDescr_;
+        metadataDescr = metadataDescr_;
     }
+
+    function setMetadataExtLink(string memory metadataExtLink_) external onlyOwner {
+        metadataExtLink = metadataExtLink_;
+    }
+
+    function setMetadataAnimationUrl(string memory metadataAnimationUrl_) external onlyOwner {
+        metadataAnimationUrl = metadataAnimationUrl_;
+    }
+
     function _baseURI() internal view override returns (string memory) {
         return baseURI;
     }
+
     function increaseRank(uint256 tokenID_) external onlyOwner {
         rank[tokenID_]++;
     }
+
     function decreaseRank(uint256 tokenID_) external onlyOwner {
         rank[tokenID_]--;
     }
+
     function resetRank(uint256 tokenID_) external onlyOwner {
         rank[tokenID_] = 0;
     }
 
     function getImage(uint256 tokenId) private view returns (string memory) {
         if (revealed) {
-        return string(abi.encodePacked(_baseURI(), Strings.toString(tokenId), '.png?rank=',rank[tokenId]));
+            return string(abi.encodePacked(_baseURI(), Strings.toString(tokenId), '.jpg?rank=', rank[tokenId]));
         }
-        return string(abi.encodePacked(_baseURI(), '0.png'));
+        return string(abi.encodePacked(_baseURI(), 'logo_square.jpg'));
     }
 
     function getMetadata(uint256 tokenId) private view returns (string memory) {
         require(_exists(tokenId), "ERC1155: URI get of nonexistent token");
 
         string memory attributes = string(abi.encodePacked(
-                '[{"trait_type": "', issuedDegrees[tokenId], '", "value": "Received"}]'));
+                '[{"trait_type": "Type", "value": "Super Fan"},{"display_type":"boost_numer","trait_type":"Community Rank","value":',
+                rank[tokenId], '}]'));
         string memory json = Base64.encode(bytes(string(
-                abi.encodePacked('{"name": "', _metadataName,'", "description": "', _metadataDescr,'", "attributes":',
-                attributes, ', "image": "', getImage(tokenId),'"}')
+                abi.encodePacked('{"name": "', metadataName, '", "description": "', metadataDescr, '", "attributes":',
+                attributes, ', "image": "', getImage(tokenId), '","external_link":"', metadataExtLink,
+                '", "youtube_url": "https://www.youtube.com/watch?v=OuIqlNXL3OE", "animation_url": "', metadataAnimationUrl, '"}')
             )));
 
         return json;
     }
 
-    function uri(uint256 tokenId) public view override returns (string memory) {
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
         string memory json = getMetadata(tokenId);
         // non-existent token check integrated
         return string(abi.encodePacked('data:application/json;base64,', json));
+    }
+
+    function setContractURI(string calldata contractURI_) external onlyOwner() {
+        contractURI = contractURI_;
+    }
+
+    function contractURI() external view returns (string memory) {
+        return contractURI;
     }
 }

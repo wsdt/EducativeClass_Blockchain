@@ -18,6 +18,6 @@ contract AddRecover is Ownable {
     }
 
     function recoverGas(uint256 amount) external onlyOwner {
-        address(this).transfer(amount);
+        payable(address(this)).transfer(amount);
     }
 }
