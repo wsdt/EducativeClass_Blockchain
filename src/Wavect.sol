@@ -51,7 +51,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
         if (revealed) {
             return string(abi.encodePacked(_baseURI(), Strings.toString(tokenId), '.jpg?rank=', rank[tokenId]));
         }
-        return string(abi.encodePacked(_baseURI(), 'logo_square.jpg'));
+        return string(abi.encodePacked(_baseURI()));
     }
 
     function getMetadata(uint256 tokenId) private view returns (string memory) {
@@ -59,7 +59,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
 
         string memory attributes = string(abi.encodePacked(
                 '[{"trait_type": "Type", "value": "Super Fan"},{"display_type":"boost_numer","trait_type":"Community Rank","value":',
-                rank[tokenId], '}]'));
+                Strings.toString(rank[tokenId]), '}]'));
         string memory json = Base64.encode(bytes(string(
                 abi.encodePacked('{"name": "', metadataName, '", "description": "', metadataDescr, '", "attributes":',
                 attributes, ', "image": "', getImage(tokenId), '","external_link":"', metadataExtLink,
