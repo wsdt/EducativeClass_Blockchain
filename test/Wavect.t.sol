@@ -13,17 +13,23 @@ contract WavectTest is Test {
     address constant NONOWNER = address(2);
     bytes32[] NONOWNER_PROOF;
 
-    address constant OTHER= address(3);
+    address constant OTHER = address(3);
     bytes32[] OTHER_PROOF;
 
-    bytes32 MERKLE_ROOT = 0x344510bd0c324c3912b13373e89df42d1b50450e9764a454b2aa6e2968a4578a;
+    address constant OTHER_2 = address(4);
+    bytes32[] OTHER_PROOF_2;
+
+    bytes32 MERKLE_ROOT = 0x5071e19149cc9b870c816e671bc5db717d1d99185c17b082af957a0a93888dd9;
 
     function setUp() public {
         OWNER_PROOF.push(0xd52688a8f926c816ca1e079067caba944f158e764817b83fc43594370ca9cf62);
-        OWNER_PROOF.push(0x5b70e80538acdabd6137353b0f9d8d149f4dba91e8be2e7946e409bfdbe685b9);
+        OWNER_PROOF.push(0x735c77c52a2b69afcd4e13c0a6ece7e4ccdf2b379d39417e21efe8cd10b5ff1b);
         NONOWNER_PROOF.push(0x1468288056310c82aa4c01a7e12a10f8111a0560e72b700555479031b86c357d);
-        NONOWNER_PROOF.push(0x5b70e80538acdabd6137353b0f9d8d149f4dba91e8be2e7946e409bfdbe685b9);
+        NONOWNER_PROOF.push(0x735c77c52a2b69afcd4e13c0a6ece7e4ccdf2b379d39417e21efe8cd10b5ff1b);
+        OTHER_PROOF.push(0xa876da518a393dbd067dc72abfa08d475ed6447fca96d92ec3f9e7eba503ca61);
         OTHER_PROOF.push(0xf95c14e6953c95195639e8266ab1a6850864d59a829da9f9b13602ee522f672b);
+        OTHER_PROOF_2.push(0x5b70e80538acdabd6137353b0f9d8d149f4dba91e8be2e7946e409bfdbe685b9);
+        OTHER_PROOF_2.push(0xf95c14e6953c95195639e8266ab1a6850864d59a829da9f9b13602ee522f672b);
 
         vm.prank(OWNER);
         wavect = new Wavect("https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "Wavect",
@@ -212,6 +218,18 @@ contract WavectTest is Test {
         // used startPrank
     }
 
+    function testOther2Mint() public {
+        assertEq(wavect.balanceOf(OTHER_2), 0);
+        vm.startPrank(OTHER_2);
+        wavect.mint(OTHER_PROOF_2);
+        assertEq(wavect.balanceOf(OTHER_2), 1);
+        assertEq(wavect.ownerOf(0), OTHER_2);
+        vm.expectRevert("Already minted");
+        wavect.mint(OTHER_PROOF_2);
+        vm.stopPrank();
+        // used startPrank
+    }
+
     function testOwnerIncreaseRank() public {
         vm.prank(NONOWNER);
         wavect.mint(NONOWNER_PROOF);
@@ -286,13 +304,15 @@ contract WavectTest is Test {
         vm.expectRevert("Supply frozen");
         wavect.setTotalSupply(100);
         vm.stopPrank();
+
         vm.prank(OTHER);
         wavect.mint(OTHER_PROOF);
         assertEq(wavect.balanceOf(OTHER), 1);
         assertEq(wavect.ownerOf(2), OTHER);
+
         vm.expectRevert("No more tokens available");
-        vm.prank(address(98));
-        wavect.mint(OTHER_PROOF);
+        vm.prank(OTHER_2);
+        wavect.mint(OTHER_PROOF_2);
     }
 
     function testMetadata() public {
