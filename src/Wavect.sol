@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.7;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
@@ -34,8 +34,13 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
     mapping(uint256 => uint256) public communityRank;
     mapping(address => uint256) public minted;
 
+    event RankIncreased(uint256 indexed tokenId, uint256 newRank);
+    event RankDecreased(uint256 indexed tokenId, uint256 newRank);
+    event RankReset(uint256 indexed tokenId);
+
     constructor(string memory contractURI_, string memory baseURI_, string memory metadataName_, string memory metadataDescr_,
-        string memory metadataExtLink_, string memory metadataAnimationUrl_, string memory imgFileExt_, uint256 totalSupply_, bytes32 merkleRoot_)
+        string memory metadataExtLink_, string memory metadataAnimationUrl_, string memory imgFileExt_, uint256 totalSupply_,
+        bytes32 merkleRoot_)
     ERC721("Wavect", "WACT")
     LinearlyAssigned(totalSupply_, 0)
     {
@@ -68,6 +73,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
     }
 
     function withdrawRevenue(address to_) external onlyOwner nonReentrant {
+        require(address(this).balance > 0, "No balance");
         payable(to_).transfer(address(this).balance);
     }
 
@@ -107,19 +113,40 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
         return baseURI;
     }
 
-    function increaseRank(uint256 tokenID_) external onlyOwner {
+    function increaseRank(uint256 tokenID_) public onlyOwner {
         require(_exists(tokenID_), "Non existent");
         communityRank[tokenID_] += 1;
+        emit RankIncreased(tokenID_, communityRank[tokenID_]);
     }
 
-    function decreaseRank(uint256 tokenID_) external onlyOwner {
+    function increaseRankBulk(uint256[] calldata tokenIDs_) external onlyOwner {
+        for (uint256 i = 0; i < tokenIDs_.length; i++) {
+            increaseRank(tokenIDs_[i]);
+        }
+    }
+
+    function decreaseRank(uint256 tokenID_) public onlyOwner {
         require(_exists(tokenID_), "Non existent");
         communityRank[tokenID_] -= 1;
+        emit RankDecreased(tokenID_, communityRank[tokenID_]);
     }
 
-    function resetRank(uint256 tokenID_) external onlyOwner {
+    function decreaseRankBulk(uint256[] calldata tokenIDs_) external onlyOwner {
+        for (uint256 i = 0; i < tokenIDs_.length; i++) {
+            decreaseRank(tokenIDs_[i]);
+        }
+    }
+
+    function resetRank(uint256 tokenID_) public onlyOwner {
         require(_exists(tokenID_), "Non existent");
         communityRank[tokenID_] = 0;
+        emit RankReset(tokenID_);
+    }
+
+    function resetRankBulk(uint256[] calldata tokenIDs_) external onlyOwner {
+        for (uint256 i = 0; i < tokenIDs_.length; i++) {
+            resetRank(tokenIDs_[i]);
+        }
     }
 
     function setContractURI(string calldata contractURI_) external onlyOwner() {

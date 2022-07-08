@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.7;
 
 import "forge-std/Test.sol";
 import "../src/Wavect.sol";
@@ -22,6 +22,10 @@ contract WavectTest is Test {
     bytes32[] FAULTY_PROOF;
 
     bytes32 MERKLE_ROOT = 0x5071e19149cc9b870c816e671bc5db717d1d99185c17b082af957a0a93888dd9;
+
+    event RankIncreased(uint256 indexed tokenId, uint256 newRank);
+    event RankDecreased(uint256 indexed tokenId, uint256 newRank);
+    event RankReset(uint256 indexed tokenId);
 
     function setUp() public {
         OWNER_PROOF.push(0xd52688a8f926c816ca1e079067caba944f158e764817b83fc43594370ca9cf62);
@@ -119,16 +123,43 @@ contract WavectTest is Test {
         wavect.increaseRank(0);
     }
 
+    function testNonOwnerIncreaseBulkRank() public {
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+        vm.expectRevert("Ownable: caller is not the owner");
+        vm.prank(NONOWNER);
+        wavect.increaseRankBulk(ids);
+    }
+
     function testNonOwnerDecreaseRank() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
         wavect.decreaseRank(0);
     }
 
+    function testNonOwnerDecreaseBulkRank() public {
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+        vm.expectRevert("Ownable: caller is not the owner");
+        vm.prank(NONOWNER);
+        wavect.decreaseRankBulk(ids);
+    }
+
     function testNonOwnerResetRank() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
         wavect.resetRank(0);
+    }
+
+    function testNonOwnerResetBulkRank() public {
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+        vm.expectRevert("Ownable: caller is not the owner");
+        vm.prank(NONOWNER);
+        wavect.resetRankBulk(ids);
     }
 
     function testOwnerSetMaxWallet() public {
@@ -266,8 +297,59 @@ contract WavectTest is Test {
         assertEq(wavect.communityRank(0), 0);
         wavect.increaseRank(0);
         assertEq(wavect.communityRank(0), 1);
+
+        vm.expectEmit(true, true, false, false);
+        emit RankIncreased(0, 2);
         wavect.increaseRank(0);
         assertEq(wavect.communityRank(0), 2);
+        vm.stopPrank();
+    }
+
+    function testOwnerIncreaseBulkRank() public {
+        vm.prank(NONOWNER);
+        wavect.mint(NONOWNER_PROOF);
+        assertEq(wavect.balanceOf(NONOWNER), 1);
+        vm.prank(OTHER);
+        wavect.mint(OTHER_PROOF);
+        assertEq(wavect.balanceOf(OTHER), 1);
+
+        vm.startPrank(OWNER);
+        assertEq(wavect.communityRank(0), 0);
+        assertEq(wavect.communityRank(1), 0);
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+        wavect.increaseRankBulk(ids);
+        assertEq(wavect.communityRank(0), 1);
+        assertEq(wavect.communityRank(1), 1);
+        vm.stopPrank();
+    }
+
+    function testOwnerDecreaseBulkRank() public {
+        vm.prank(NONOWNER);
+        wavect.mint(NONOWNER_PROOF);
+        assertEq(wavect.balanceOf(NONOWNER), 1);
+        vm.prank(OTHER);
+        wavect.mint(OTHER_PROOF);
+        assertEq(wavect.balanceOf(OTHER), 1);
+
+        vm.startPrank(OWNER);
+        assertEq(wavect.communityRank(0), 0);
+        assertEq(wavect.communityRank(1), 0);
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+
+        // decreasing below 0 fails by default in new solidity versions.
+
+        wavect.increaseRankBulk(ids);
+        assertEq(wavect.communityRank(0), 1);
+        assertEq(wavect.communityRank(1), 1);
+
+        wavect.decreaseRankBulk(ids);
+
+        assertEq(wavect.communityRank(0), 0);
+        assertEq(wavect.communityRank(1), 0);
         vm.stopPrank();
     }
 
@@ -280,6 +362,8 @@ contract WavectTest is Test {
         wavect.increaseRank(0);
         assertEq(wavect.communityRank(0), 1, "Rank increase failed");
 
+        vm.expectEmit(true, true, false, false);
+        emit RankDecreased(0, 1);
         wavect.decreaseRank(0);
         assertEq(wavect.communityRank(0), 0, "Decrease failed");
         vm.stopPrank();
@@ -295,9 +379,37 @@ contract WavectTest is Test {
         wavect.increaseRank(0);
         assertEq(wavect.communityRank(0), 2);
 
-        assertEq(wavect.communityRank(0), 2);
+        vm.expectEmit(true, false, false, false);
+        emit RankReset(0);
         wavect.resetRank(0);
         assertEq(wavect.communityRank(0), 0);
+        vm.stopPrank();
+    }
+
+    function testOwnerResetBulkRank() public {
+        vm.prank(NONOWNER);
+        wavect.mint(NONOWNER_PROOF);
+        assertEq(wavect.balanceOf(NONOWNER), 1);
+        vm.prank(OTHER);
+        wavect.mint(OTHER_PROOF);
+        assertEq(wavect.balanceOf(OTHER), 1);
+
+        vm.startPrank(OWNER);
+        assertEq(wavect.communityRank(0), 0);
+        assertEq(wavect.communityRank(1), 0);
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+
+        wavect.increaseRankBulk(ids);
+        wavect.increaseRankBulk(ids);
+        assertEq(wavect.communityRank(0), 2);
+        assertEq(wavect.communityRank(1), 2);
+
+        wavect.resetRankBulk(ids);
+
+        assertEq(wavect.communityRank(0), 0);
+        assertEq(wavect.communityRank(1), 0);
         vm.stopPrank();
     }
 
@@ -402,6 +514,9 @@ contract WavectTest is Test {
         wavect.withdrawRevenue(NONOWNER);
         assertEq(address(NONOWNER).balance, 0.1 ether);
         assertEq(address(wavect).balance, 0 ether);
+
+        vm.expectRevert("No balance");
+        wavect.withdrawRevenue(NONOWNER);
         vm.stopPrank();
 
         vm.expectRevert("Ownable: caller is not the owner");
