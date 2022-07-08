@@ -5,14 +5,18 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/PullPayment.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 import "base64-sol/base64.sol";
 import "./AddRecover.sol";
 import "./LinearlyAssigned.sol";
 
-contract Wavect is ERC721, LinearlyAssigned, AddRecover {
+contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPayment, Pausable {
 
     uint256 public maxWallet;
     uint256 public metadataSellerFeeBps;
+    uint256 public mintPrice;
 
     address public metadataFeeRecipient;
 
@@ -22,6 +26,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
     string public metadataName;
     string public metadataExtLink;
     string public metadataAnimationUrl;
+    string public imgFileExt;
 
     bool public revealed;
     bool public publicSaleEnabled;
@@ -29,10 +34,11 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
     bytes32 public merkleRoot;
 
     /// @dev Used to specifically reward active community members, etc.
-    mapping(uint256 => uint256) public rank;
+    mapping(uint256 => uint256) public communityRank;
+    mapping(address => uint256) public minted;
 
     constructor(string memory contractURI_, string memory baseURI_, string memory metadataName_, string memory metadataDescr_,
-        string memory metadataExtLink_, string memory metadataAnimationUrl_, uint256 totalSupply_, bytes32 merkleRoot_)
+        string memory metadataExtLink_, string memory metadataAnimationUrl_, string memory imgFileExt_, uint256 totalSupply_, bytes32 merkleRoot_)
     ERC721("Wavect", "WACT")
     LinearlyAssigned(totalSupply_, 0)
     {
@@ -43,21 +49,34 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
         metadataName = metadataName_;
         metadataExtLink = metadataExtLink_;
         metadataAnimationUrl = metadataAnimationUrl_;
+        imgFileExt = imgFileExt_;
         merkleRoot = merkleRoot_;
     }
 
-    function mint(bytes32[] calldata _merkleProof) external {
-        require(balanceOf(_msgSender()) < maxWallet, "Already minted");
+    function mint(bytes32[] calldata _merkleProof) payable external nonReentrant whenNotPaused {
+        require(minted[_msgSender()] < maxWallet, "Already minted");
+        require(msg.value >= mintPrice, "Payment too low");
+
         if (!publicSaleEnabled) {
             bytes32 leaf = keccak256(abi.encodePacked(_msgSender()));
             require(MerkleProof.verify(_merkleProof, merkleRoot, leaf), "Invalid proof");
         }
         _mint(_msgSender(), nextToken());
+        minted[_msgSender()] += 1;
+
+        if (msg.value > mintPrice) {
+            // if paid too much, allow to get funds back
+            _asyncTransfer(_msgSender(), msg.value - mintPrice);
+        }
+    }
+
+    function withdrawRevenue(address to_) external onlyOwner nonReentrant {
+        payable(to_).transfer(address(this).balance);
     }
 
     function getImage(uint256 tokenId) private view returns (string memory) {
         if (revealed) {
-            return string(abi.encodePacked(_baseURI(), Strings.toString(tokenId), '.jpg?rank=', rank[tokenId]));
+            return string(abi.encodePacked(_baseURI(), Strings.toString(tokenId), imgFileExt, '?rank=', communityRank[tokenId]));
         }
         return string(abi.encodePacked(_baseURI()));
     }
@@ -67,7 +86,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
 
         string memory attributes = string(abi.encodePacked(
                 '[{"trait_type": "Type", "value": "Super Fan"},{"display_type":"boost_numer","trait_type":"Community Rank","value":',
-                Strings.toString(rank[tokenId]), '}]'));
+                Strings.toString(communityRank[tokenId]), '}]'));
         string memory json = Base64.encode(bytes(string(
                 abi.encodePacked('{"name": "', metadataName, '", "description": "', metadataDescr, '", "attributes":',
                 attributes, ', "image": "', getImage(tokenId), '","external_link":"', metadataExtLink,
@@ -93,21 +112,29 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
 
     function increaseRank(uint256 tokenID_) external onlyOwner {
         require(_exists(tokenID_), "Non existent");
-        rank[tokenID_] += 1;
+        communityRank[tokenID_] += 1;
     }
 
     function decreaseRank(uint256 tokenID_) external onlyOwner {
         require(_exists(tokenID_), "Non existent");
-        rank[tokenID_] -= 1;
+        communityRank[tokenID_] -= 1;
     }
 
     function resetRank(uint256 tokenID_) external onlyOwner {
         require(_exists(tokenID_), "Non existent");
-        rank[tokenID_] = 0;
+        communityRank[tokenID_] = 0;
     }
 
     function setContractURI(string calldata contractURI_) external onlyOwner() {
         _contractURI = contractURI_;
+    }
+
+    function setMintPrice(uint256 mintPrice_) external onlyOwner {
+        mintPrice = mintPrice_;
+    }
+
+    function setImgFileExt(string memory imgFileExt_) external onlyOwner {
+        imgFileExt = imgFileExt_;
     }
 
     function setPublicSale(bool publicSale_) external onlyOwner {
@@ -116,6 +143,14 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover {
 
     function setMerkleRoot(bytes32 merkleRoot_) external onlyOwner {
         merkleRoot = merkleRoot_;
+    }
+
+    function setPaused(bool pause_) external onlyOwner {
+        if (pause_) {
+            _pause();
+        } else {
+            _unpause();
+        }
     }
 
     function setMaxWallet(uint256 maxWallet_) external onlyOwner {
