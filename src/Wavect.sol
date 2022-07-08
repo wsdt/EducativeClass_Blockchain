@@ -15,10 +15,7 @@ import "./LinearlyAssigned.sol";
 contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPayment, Pausable {
 
     uint256 public maxWallet;
-    uint256 public metadataSellerFeeBps;
     uint256 public mintPrice;
-
-    address public metadataFeeRecipient;
 
     string private _contractURI;
     string public baseURI;

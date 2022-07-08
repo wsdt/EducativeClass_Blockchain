@@ -17,6 +17,7 @@ contract AddRecover is Ownable {
         IERC721(tokenAddress).transferFrom(address(this), owner(), tokenId_);
     }
 
+    /// @dev Recover accidentally sent ETH.
     function recoverGas(uint256 amount) external onlyOwner {
         payable(address(this)).transfer(amount);
     }
