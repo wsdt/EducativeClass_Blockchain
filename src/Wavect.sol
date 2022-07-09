@@ -63,17 +63,13 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
         merkleRoot = merkleRoot_;
     }
 
-    function prefixed(bytes32 hash) private pure returns (bytes32) {
-        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hash));
-    }
-
     function claimRewardNFT(uint256 tokenID_, uint256 nonce_, bytes memory signature_) external nonReentrant whenNotPaused {
         require(tokenID_ < RESERVED_TOKENS, "Not reward token");
         require(!usedRewardClaimNonces[nonce_], "Nonce used");
         usedRewardClaimNonces[nonce_] = true;
 
         // recreate client generated message
-        bytes32 hash = prefixed(keccak256(abi.encodePacked(_msgSender(), tokenID_, nonce_)));
+        bytes32 hash = ECDSA.toEthSignedMessageHash(keccak256(abi.encodePacked(_msgSender(), tokenID_, nonce_)));
         require(SignatureChecker.isValidSignatureNow(owner(), hash, signature_), "Invalid voucher"); // only owner signatures
 
         _mint(_msgSender(), tokenID_);
@@ -102,7 +98,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
     }
 
     function getImage(uint256 tokenId) private view returns (string memory) {
-        if (revealed) {
+        if (revealed || tokenId < RESERVED_TOKENS) {
             return string(abi.encodePacked(_baseURI(), Strings.toString(tokenId), imgFileExt, '?rank=', communityRank[tokenId]));
         }
         return string(abi.encodePacked(_baseURI()));

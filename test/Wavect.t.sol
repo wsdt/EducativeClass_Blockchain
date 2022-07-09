@@ -9,8 +9,9 @@ contract WavectTest is Test {
     Wavect wavect;
     address constant OWNER = address(0x14791697260E4c9A71f18484C9f997B308e59325);
     bytes32[] OWNER_PROOF;
+    bytes OWNER_SIG_EXAMPLE = hex"2a10fa3403560e476d7f93eebcfb24fb70b39c00407fae4a45f76d9233cff9cf5d1403b69de1ab688c9d78fd4394cb883c343269384d68468dbbe2c8bfaee2091c";
 
-    address constant NONOWNER = address(1);
+    address constant NONOWNER = address(1); // NOTE: the 0x01 address does not work always
     bytes32[] NONOWNER_PROOF;
 
     address constant OTHER = address(2);
@@ -522,16 +523,16 @@ contract WavectTest is Test {
         assertEq(wavect.balanceOf(OWNER), 1);
 
         assertEq(address(wavect).balance, 0.1 ether);
-        wavect.withdrawRevenue(NONOWNER);
-        assertEq(address(NONOWNER).balance, 0.1 ether);
+        wavect.withdrawRevenue(OTHER);
+        assertEq(address(OTHER).balance, 0.1 ether);
         assertEq(address(wavect).balance, 0 ether);
 
         vm.expectRevert("No balance");
-        wavect.withdrawRevenue(NONOWNER);
+        wavect.withdrawRevenue(OTHER);
         vm.stopPrank();
 
         vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
+        vm.prank(OTHER);
         wavect.withdrawRevenue(OWNER);
     }
 
@@ -595,6 +596,17 @@ contract WavectTest is Test {
         assertEq(wavect.ownerOf(firstTokenID), NONOWNER);
         assertEq(firstTokenID, 3);
 
+        assertEq(wavect.usedRewardClaimNonces(0), false, "Nonce already used");
+        vm.stopPrank();
+
+
+        console.log(string(abi.encodePacked()));
+        vm.prank(OTHER_2);
+        wavect.claimRewardNFT(0, 0, OWNER_SIG_EXAMPLE);
+        assertEq(wavect.usedRewardClaimNonces(0), true, "Nonce not used");
+        assertEq(wavect.balanceOf(OTHER_2), 1);
+        assertEq(wavect.ownerOf(0), OTHER_2);
+        // TODO: Also test getImage URI for reserved tokens!
 
     }
 
