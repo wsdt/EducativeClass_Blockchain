@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/PullPayment.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "base64-sol/base64.sol";
 import "./AddRecover.sol";
 import "./LinearlyAssigned.sol";
@@ -16,6 +17,9 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
 
     /// @dev The first 3 tokenIDs are reserved for another use-case (giving incentives to do something good)
     uint256 public constant RESERVED_TOKENS = 3;
+    uint256 public constant SOLIDARITY_ID = 0;
+    uint256 public constant ENVIRONMENT_ID = 1;
+    uint256 public constant HEALTH_ID = 2;
 
     uint256 public maxWallet;
     uint256 public mintPrice;
@@ -36,6 +40,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
     /// @dev Used to specifically reward active community members, etc.
     mapping(uint256 => uint256) public communityRank;
     mapping(address => uint256) public minted;
+    mapping(uint256 => bool) public usedRewardClaimNonces;
 
     event RankIncreased(uint256 indexed tokenId, uint256 newRank);
     event RankDecreased(uint256 indexed tokenId, uint256 newRank);
@@ -58,13 +63,29 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
         merkleRoot = merkleRoot_;
     }
 
-    function mint(bytes32[] calldata _merkleProof) payable external nonReentrant whenNotPaused {
+    function prefixed(bytes32 hash) private pure returns (bytes32) {
+        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hash));
+    }
+
+    function claimRewardNFT(uint256 tokenID_, uint256 nonce_, bytes memory signature_) external nonReentrant whenNotPaused {
+        require(tokenID_ < RESERVED_TOKENS, "Not reward token");
+        require(!usedRewardClaimNonces[nonce_], "Nonce used");
+        usedRewardClaimNonces[nonce_] = true;
+
+        // recreate client generated message
+        bytes32 hash = prefixed(keccak256(abi.encodePacked(_msgSender(), tokenID_, nonce_)));
+        require(SignatureChecker.isValidSignatureNow(owner(), hash, signature_), "Invalid voucher"); // only owner signatures
+
+        _mint(_msgSender(), tokenID_);
+    }
+
+    function mint(bytes32[] calldata merkleProof_) payable external nonReentrant whenNotPaused {
         require(minted[_msgSender()] < maxWallet, "Already minted");
         require(msg.value >= mintPrice, "Payment too low");
 
         if (!publicSaleEnabled) {
             bytes32 leaf = keccak256(abi.encodePacked(_msgSender()));
-            require(MerkleProof.verify(_merkleProof, merkleRoot, leaf), "Invalid proof");
+            require(MerkleProof.verify(merkleProof_, merkleRoot, leaf), "Invalid proof");
         }
         _mint(_msgSender(), nextToken());
         minted[_msgSender()] += 1;

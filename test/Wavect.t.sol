@@ -7,21 +7,21 @@ import "forge-std/console2.sol";
 
 contract WavectTest is Test {
     Wavect wavect;
-    address constant OWNER = address(1);
+    address constant OWNER = address(0x14791697260E4c9A71f18484C9f997B308e59325);
     bytes32[] OWNER_PROOF;
 
-    address constant NONOWNER = address(2);
+    address constant NONOWNER = address(1);
     bytes32[] NONOWNER_PROOF;
 
-    address constant OTHER = address(3);
+    address constant OTHER = address(2);
     bytes32[] OTHER_PROOF;
 
-    address constant OTHER_2 = address(4);
+    address constant OTHER_2 = address(3);
     bytes32[] OTHER_PROOF_2;
 
     bytes32[] FAULTY_PROOF;
 
-    bytes32 MERKLE_ROOT = 0x5071e19149cc9b870c816e671bc5db717d1d99185c17b082af957a0a93888dd9;
+    bytes32 MERKLE_ROOT = 0x289eb88ae6a8930e137c767ec946fc9d80a02f04a32104b62a67cd6aad816d30;
 
     /// @dev Where do we start, at 0 or do we have reserved tokens?
     uint256 firstTokenID;
@@ -32,14 +32,14 @@ contract WavectTest is Test {
 
     function setUp() public {
 
-        OWNER_PROOF.push(0xd52688a8f926c816ca1e079067caba944f158e764817b83fc43594370ca9cf62);
-        OWNER_PROOF.push(0x735c77c52a2b69afcd4e13c0a6ece7e4ccdf2b379d39417e21efe8cd10b5ff1b);
-        NONOWNER_PROOF.push(0x1468288056310c82aa4c01a7e12a10f8111a0560e72b700555479031b86c357d);
-        NONOWNER_PROOF.push(0x735c77c52a2b69afcd4e13c0a6ece7e4ccdf2b379d39417e21efe8cd10b5ff1b);
-        OTHER_PROOF.push(0xa876da518a393dbd067dc72abfa08d475ed6447fca96d92ec3f9e7eba503ca61);
-        OTHER_PROOF.push(0xf95c14e6953c95195639e8266ab1a6850864d59a829da9f9b13602ee522f672b);
-        OTHER_PROOF_2.push(0x5b70e80538acdabd6137353b0f9d8d149f4dba91e8be2e7946e409bfdbe685b9);
-        OTHER_PROOF_2.push(0xf95c14e6953c95195639e8266ab1a6850864d59a829da9f9b13602ee522f672b);
+        OWNER_PROOF.push(0x1468288056310c82aa4c01a7e12a10f8111a0560e72b700555479031b86c357d);
+        OWNER_PROOF.push(0x32ce85405983c392122c7c4869690b8081fc9ecec74276206caea196c6e545cb);
+        NONOWNER_PROOF.push(0x513741ffb1226167f112de55d110bf11ff18ebc0afe0068c899d583a66d755c8);
+        NONOWNER_PROOF.push(0x32ce85405983c392122c7c4869690b8081fc9ecec74276206caea196c6e545cb);
+        OTHER_PROOF.push(0x5b70e80538acdabd6137353b0f9d8d149f4dba91e8be2e7946e409bfdbe685b9);
+        OTHER_PROOF.push(0x0827f224e08cb622b4f65d2795452706e60cc2aaa0b8cd8143170f563b35e581);
+        OTHER_PROOF_2.push(0xd52688a8f926c816ca1e079067caba944f158e764817b83fc43594370ca9cf62);
+        OTHER_PROOF_2.push(0x0827f224e08cb622b4f65d2795452706e60cc2aaa0b8cd8143170f563b35e581);
         FAULTY_PROOF.push(bytes32(0x00));
 
         vm.prank(OWNER);
@@ -578,10 +578,24 @@ contract WavectTest is Test {
         assertEq(wavect.balanceOf(OWNER), 0);
         vm.expectRevert("Pausable: paused");
         wavect.mint(OWNER_PROOF);
+
+        vm.expectRevert("Pausable: paused");
+        wavect.claimRewardNFT(firstTokenID, 0, "");
     }
 
     function testImproveTokens() public {
         assertEq(wavect.RESERVED_TOKENS(), 3, "Unexpected amount of reserved tokens");
+        assertEq(wavect.SOLIDARITY_ID(), 0, "Unexpected Solidarity ID");
+        assertEq(wavect.ENVIRONMENT_ID(), 1, "Unexpected Environment ID");
+        assertEq(wavect.HEALTH_ID(), 2, "Unexpected Health ID");
+
+        vm.startPrank(NONOWNER);
+        wavect.mint(NONOWNER_PROOF);
+        assertEq(wavect.balanceOf(NONOWNER), 1);
+        assertEq(wavect.ownerOf(firstTokenID), NONOWNER);
+        assertEq(firstTokenID, 3);
+
+
     }
 
     event Received(uint);
