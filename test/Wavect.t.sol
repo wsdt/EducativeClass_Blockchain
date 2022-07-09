@@ -23,11 +23,15 @@ contract WavectTest is Test {
 
     bytes32 MERKLE_ROOT = 0x5071e19149cc9b870c816e671bc5db717d1d99185c17b082af957a0a93888dd9;
 
+    /// @dev Where do we start, at 0 or do we have reserved tokens?
+    uint256 firstTokenID;
+
     event RankIncreased(uint256 indexed tokenId, uint256 newRank);
     event RankDecreased(uint256 indexed tokenId, uint256 newRank);
     event RankReset(uint256 indexed tokenId);
 
     function setUp() public {
+
         OWNER_PROOF.push(0xd52688a8f926c816ca1e079067caba944f158e764817b83fc43594370ca9cf62);
         OWNER_PROOF.push(0x735c77c52a2b69afcd4e13c0a6ece7e4ccdf2b379d39417e21efe8cd10b5ff1b);
         NONOWNER_PROOF.push(0x1468288056310c82aa4c01a7e12a10f8111a0560e72b700555479031b86c357d);
@@ -42,6 +46,9 @@ contract WavectTest is Test {
         wavect = new Wavect("https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "Wavect",
             "This NFT can be used to vote on podcast guests, topics and many other things. We also plan to release products in the near future, this NFT will give you then either a lifelong rebate or even allows you to use our products for free.",
             "https://wavect.io?nft=true", "https://wavect.io/official-nft/wavect_video.mp4", ".jpg", 100, MERKLE_ROOT);
+
+        firstTokenID = wavect.RESERVED_TOKENS();
+
         vm.stopPrank();
     }
 
@@ -257,7 +264,7 @@ contract WavectTest is Test {
         vm.startPrank(NONOWNER);
         wavect.mint(NONOWNER_PROOF);
         assertEq(wavect.balanceOf(NONOWNER), 1);
-        assertEq(wavect.ownerOf(0), NONOWNER);
+        assertEq(wavect.ownerOf(firstTokenID), NONOWNER);
         vm.expectRevert("Already minted");
         wavect.mint(NONOWNER_PROOF);
         vm.stopPrank();
@@ -269,7 +276,7 @@ contract WavectTest is Test {
         vm.startPrank(OWNER);
         wavect.mint(OWNER_PROOF);
         assertEq(wavect.balanceOf(OWNER), 1);
-        assertEq(wavect.ownerOf(0), OWNER);
+        assertEq(wavect.ownerOf(firstTokenID), OWNER);
         vm.expectRevert("Already minted");
         wavect.mint(OWNER_PROOF);
         vm.stopPrank();
@@ -281,7 +288,7 @@ contract WavectTest is Test {
         vm.startPrank(OTHER_2);
         wavect.mint(OTHER_PROOF_2);
         assertEq(wavect.balanceOf(OTHER_2), 1);
-        assertEq(wavect.ownerOf(0), OTHER_2);
+        assertEq(wavect.ownerOf(firstTokenID), OTHER_2);
         vm.expectRevert("Already minted");
         wavect.mint(OTHER_PROOF_2);
         vm.stopPrank();
@@ -294,14 +301,14 @@ contract WavectTest is Test {
         assertEq(wavect.balanceOf(NONOWNER), 1);
 
         vm.startPrank(OWNER);
-        assertEq(wavect.communityRank(0), 0);
-        wavect.increaseRank(0);
-        assertEq(wavect.communityRank(0), 1);
+        assertEq(wavect.communityRank(firstTokenID), 0);
+        wavect.increaseRank(firstTokenID);
+        assertEq(wavect.communityRank(firstTokenID), 1);
 
         vm.expectEmit(true, true, false, false);
-        emit RankIncreased(0, 2);
-        wavect.increaseRank(0);
-        assertEq(wavect.communityRank(0), 2);
+        emit RankIncreased(firstTokenID, 2);
+        wavect.increaseRank(firstTokenID);
+        assertEq(wavect.communityRank(firstTokenID), 2);
         vm.stopPrank();
     }
 
@@ -314,14 +321,15 @@ contract WavectTest is Test {
         assertEq(wavect.balanceOf(OTHER), 1);
 
         vm.startPrank(OWNER);
-        assertEq(wavect.communityRank(0), 0);
-        assertEq(wavect.communityRank(1), 0);
         uint256[] memory ids = new uint256[](2);
-        ids[0] = 0;
-        ids[1] = 1;
+        ids[0] = firstTokenID;
+        ids[1] = firstTokenID+1;
+
+        assertEq(wavect.communityRank(ids[0]), 0);
+        assertEq(wavect.communityRank(ids[1]), 0);
         wavect.increaseRankBulk(ids);
-        assertEq(wavect.communityRank(0), 1);
-        assertEq(wavect.communityRank(1), 1);
+        assertEq(wavect.communityRank(ids[0]), 1);
+        assertEq(wavect.communityRank(ids[1]), 1);
         vm.stopPrank();
     }
 
@@ -334,22 +342,24 @@ contract WavectTest is Test {
         assertEq(wavect.balanceOf(OTHER), 1);
 
         vm.startPrank(OWNER);
-        assertEq(wavect.communityRank(0), 0);
-        assertEq(wavect.communityRank(1), 0);
         uint256[] memory ids = new uint256[](2);
-        ids[0] = 0;
-        ids[1] = 1;
+        ids[0] = firstTokenID;
+        ids[1] = firstTokenID+1;
+
+        assertEq(wavect.communityRank(ids[0]), 0);
+        assertEq(wavect.communityRank(ids[1]), 0);
+
 
         // decreasing below 0 fails by default in new solidity versions.
 
         wavect.increaseRankBulk(ids);
-        assertEq(wavect.communityRank(0), 1);
-        assertEq(wavect.communityRank(1), 1);
+        assertEq(wavect.communityRank(ids[0]), 1);
+        assertEq(wavect.communityRank(ids[1]), 1);
 
         wavect.decreaseRankBulk(ids);
 
-        assertEq(wavect.communityRank(0), 0);
-        assertEq(wavect.communityRank(1), 0);
+        assertEq(wavect.communityRank(ids[0]), 0);
+        assertEq(wavect.communityRank(ids[1]), 0);
         vm.stopPrank();
     }
 
@@ -358,14 +368,14 @@ contract WavectTest is Test {
         wavect.mint(NONOWNER_PROOF);
         assertEq(wavect.balanceOf(NONOWNER), 1, "Mint failed");
         vm.startPrank(OWNER);
-        assertEq(wavect.communityRank(0), 0, "Initial rank wrong");
-        wavect.increaseRank(0);
-        assertEq(wavect.communityRank(0), 1, "Rank increase failed");
+        assertEq(wavect.communityRank(firstTokenID), 0, "Initial rank wrong");
+        wavect.increaseRank(firstTokenID);
+        assertEq(wavect.communityRank(firstTokenID), 1, "Rank increase failed");
 
         vm.expectEmit(true, true, false, false);
-        emit RankDecreased(0, 1);
-        wavect.decreaseRank(0);
-        assertEq(wavect.communityRank(0), 0, "Decrease failed");
+        emit RankDecreased(firstTokenID, 1);
+        wavect.decreaseRank(firstTokenID);
+        assertEq(wavect.communityRank(firstTokenID), 0, "Decrease failed");
         vm.stopPrank();
     }
 
@@ -374,15 +384,15 @@ contract WavectTest is Test {
         wavect.mint(NONOWNER_PROOF);
         assertEq(wavect.balanceOf(NONOWNER), 1);
         vm.startPrank(OWNER);
-        assertEq(wavect.communityRank(0), 0);
-        wavect.increaseRank(0);
-        wavect.increaseRank(0);
-        assertEq(wavect.communityRank(0), 2);
+        assertEq(wavect.communityRank(firstTokenID), 0);
+        wavect.increaseRank(firstTokenID);
+        wavect.increaseRank(firstTokenID);
+        assertEq(wavect.communityRank(firstTokenID), 2);
 
         vm.expectEmit(true, false, false, false);
-        emit RankReset(0);
-        wavect.resetRank(0);
-        assertEq(wavect.communityRank(0), 0);
+        emit RankReset(firstTokenID);
+        wavect.resetRank(firstTokenID);
+        assertEq(wavect.communityRank(firstTokenID), 0);
         vm.stopPrank();
     }
 
@@ -395,21 +405,22 @@ contract WavectTest is Test {
         assertEq(wavect.balanceOf(OTHER), 1);
 
         vm.startPrank(OWNER);
-        assertEq(wavect.communityRank(0), 0);
-        assertEq(wavect.communityRank(1), 0);
         uint256[] memory ids = new uint256[](2);
-        ids[0] = 0;
-        ids[1] = 1;
+        ids[0] = firstTokenID;
+        ids[1] = firstTokenID+1;
+
+        assertEq(wavect.communityRank(ids[0]), 0);
+        assertEq(wavect.communityRank(ids[1]), 0);
 
         wavect.increaseRankBulk(ids);
         wavect.increaseRankBulk(ids);
-        assertEq(wavect.communityRank(0), 2);
-        assertEq(wavect.communityRank(1), 2);
+        assertEq(wavect.communityRank(ids[0]), 2);
+        assertEq(wavect.communityRank(ids[1]), 2);
 
         wavect.resetRankBulk(ids);
 
-        assertEq(wavect.communityRank(0), 0);
-        assertEq(wavect.communityRank(1), 0);
+        assertEq(wavect.communityRank(ids[0]), 0);
+        assertEq(wavect.communityRank(ids[1]), 0);
         vm.stopPrank();
     }
 
@@ -427,12 +438,12 @@ contract WavectTest is Test {
         assertEq(wavect.totalSupply(), 2, "Invalid total supply (2)");
         wavect.mint(OWNER_PROOF);
         assertEq(wavect.balanceOf(OWNER), 1);
-        assertEq(wavect.ownerOf(0), OWNER);
+        assertEq(wavect.ownerOf(firstTokenID), OWNER);
         vm.stopPrank();
         vm.prank(NONOWNER);
         wavect.mint(NONOWNER_PROOF);
         assertEq(wavect.balanceOf(NONOWNER), 1);
-        assertEq(wavect.ownerOf(1), NONOWNER);
+        assertEq(wavect.ownerOf(firstTokenID+1), NONOWNER);
         vm.expectRevert("No more tokens available");
         vm.prank(OTHER);
         wavect.mint(OTHER_PROOF);
@@ -448,7 +459,7 @@ contract WavectTest is Test {
         vm.prank(OTHER);
         wavect.mint(OTHER_PROOF);
         assertEq(wavect.balanceOf(OTHER), 1);
-        assertEq(wavect.ownerOf(2), OTHER);
+        assertEq(wavect.ownerOf(firstTokenID+2), OTHER);
 
         vm.expectRevert("No more tokens available");
         vm.prank(OTHER_2);
@@ -460,14 +471,14 @@ contract WavectTest is Test {
         vm.prank(NONOWNER);
         wavect.mint(NONOWNER_PROOF);
         assertEq(wavect.balanceOf(NONOWNER), 1);
-        assertEq(wavect.ownerOf(0), NONOWNER);
+        assertEq(wavect.ownerOf(firstTokenID), NONOWNER);
 
-        string memory onchainMetadata = wavect.tokenURI(0);
+        string memory onchainMetadata = wavect.tokenURI(firstTokenID);
         console.log(onchainMetadata);
 
         vm.prank(OWNER);
         wavect.setReveal(true);
-        string memory onchainMetadataRevealed = wavect.tokenURI(0);
+        string memory onchainMetadataRevealed = wavect.tokenURI(firstTokenID);
         assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataRevealed)));
         // must be different
     }
@@ -487,7 +498,7 @@ contract WavectTest is Test {
         wavect.mint(FAULTY_PROOF);
         vm.expectRevert("Already minted");
         wavect.mint(FAULTY_PROOF);
-        wavect.safeTransferFrom(OWNER, NONOWNER, 1);
+        wavect.safeTransferFrom(OWNER, NONOWNER, firstTokenID+1);
         vm.expectRevert("Already minted");
         wavect.mint(FAULTY_PROOF);
         vm.stopPrank();
@@ -559,7 +570,7 @@ contract WavectTest is Test {
         vm.startPrank(NONOWNER);
         wavect.mint(NONOWNER_PROOF);
         assertEq(wavect.balanceOf(NONOWNER), 1);
-        assertEq(wavect.ownerOf(0), NONOWNER);
+        assertEq(wavect.ownerOf(firstTokenID), NONOWNER);
         vm.stopPrank();
 
         vm.prank(OWNER);
@@ -567,6 +578,10 @@ contract WavectTest is Test {
         assertEq(wavect.balanceOf(OWNER), 0);
         vm.expectRevert("Pausable: paused");
         wavect.mint(OWNER_PROOF);
+    }
+
+    function testImproveTokens() public {
+        assertEq(wavect.RESERVED_TOKENS(), 3, "Unexpected amount of reserved tokens");
     }
 
     event Received(uint);

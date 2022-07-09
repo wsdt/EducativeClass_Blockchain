@@ -14,6 +14,9 @@ import "./LinearlyAssigned.sol";
 
 contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPayment, Pausable {
 
+    /// @dev The first 3 tokenIDs are reserved for another use-case (giving incentives to do something good)
+    uint256 public constant RESERVED_TOKENS = 3;
+
     uint256 public maxWallet;
     uint256 public mintPrice;
 
@@ -42,7 +45,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
         string memory metadataExtLink_, string memory metadataAnimationUrl_, string memory imgFileExt_, uint256 totalSupply_,
         bytes32 merkleRoot_)
     ERC721("Wavect", "WACT")
-    LinearlyAssigned(totalSupply_, 0)
+    LinearlyAssigned(totalSupply_, RESERVED_TOKENS)
     {
         maxWallet = 1;
         _contractURI = contractURI_;
@@ -85,7 +88,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
     }
 
     function getMetadata(uint256 tokenId) private view returns (string memory) {
-        require(_exists(tokenId), "ERC1155: URI get of nonexistent token");
+        require(_exists(tokenId), "ERC721: URI get of nonexistent token");
 
         string memory attributes = string(abi.encodePacked(
                 '[{"trait_type": "Type", "value": "Super Fan"},{"display_type":"boost_numer","trait_type":"Community Rank","value":',
