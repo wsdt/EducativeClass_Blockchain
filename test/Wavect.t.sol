@@ -606,8 +606,15 @@ contract WavectTest is Test {
         assertEq(wavect.usedRewardClaimNonces(0), true, "Nonce not used");
         assertEq(wavect.balanceOf(OTHER_2), 1);
         assertEq(wavect.ownerOf(0), OTHER_2);
-        // TODO: Also test getImage URI for reserved tokens!
 
+
+        string memory onchainMetadata = wavect.tokenURI(firstTokenID);
+        console.log(onchainMetadata);
+
+        assertEq(wavect.revealed(), false); // reserved tokens should always be revealed
+        string memory onchainMetadataRevealed = wavect.tokenURI(0);
+        assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataRevealed)));
+        // must be different
     }
 
     event Received(uint);
