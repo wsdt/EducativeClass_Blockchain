@@ -34,6 +34,8 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
 
     string private _contractURI;
     string public baseURI;
+    /// @dev BaseURI for reserved tokens
+    string public reservedBaseURI;
     string public metadataDescr;
     string public metadataName;
     string public metadataExtLink;
@@ -54,7 +56,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
     event RankDecreased(uint256 indexed tokenId, uint256 newRank);
     event RankReset(uint256 indexed tokenId);
 
-    constructor(string memory contractURI_, string memory baseURI_, string memory metadataName_, string memory metadataDescr_,
+    constructor(string memory contractURI_, string memory baseURI_, string memory reservedBaseURI_, string memory metadataName_, string memory metadataDescr_,
         string memory metadataExtLink_, string memory metadataAnimationUrl_, string memory imgFileExt_, uint256 totalSupply_,
         bytes32 merkleRoot_)
     ERC721("Wavect", "WACT")
@@ -65,6 +67,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
         maxWallet = 1;
         _contractURI = contractURI_;
         baseURI = baseURI_;
+        reservedBaseURI = reservedBaseURI_;
         metadataDescr = metadataDescr_;
         metadataName = metadataName_;
         metadataExtLink = metadataExtLink_;
@@ -134,7 +137,9 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
     }
 
     function getImage(uint256 tokenId) private view returns (string memory) {
-        if (revealed || tokenId < RESERVED_TOKENS) {
+        if (tokenId < RESERVED_TOKENS) {
+            return string(abi.encodePacked(reservedBaseURI, Strings.toString(tokenId), imgFileExt));
+        } else if (revealed) {
             return string(abi.encodePacked(_baseURI(), Strings.toString(tokenId), imgFileExt, '?rank=', communityRank[tokenId]));
         }
         return string(abi.encodePacked(_baseURI()));
@@ -250,6 +255,10 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
     /// @dev BaseURI is used for the image itself in this case, since the metadata itself lives on-chain
     function setBaseURI(string memory baseURI_) external onlyOwner {
         baseURI = baseURI_;
+    }
+
+    function setReservedBaseURI(string memory reservedBaseURI_) external onlyOwner {
+        reservedBaseURI = reservedBaseURI_;
     }
 
     function setMetadataName(string memory metadataName_) external onlyOwner {

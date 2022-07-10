@@ -45,7 +45,7 @@ contract WavectTest is Test {
         FAULTY_PROOF.push(bytes32(0x00));
 
         vm.prank(OWNER);
-        wavect = new Wavect("https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "Wavect",
+        wavect = new Wavect("https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "https://wavect.io/official-nft/challenges/", "Wavect",
             "This NFT can be used to vote on podcast guests, topics and many other things. We also plan to release products in the near future, this NFT will give you then either a lifelong rebate or even allows you to use our products for free.",
             "https://wavect.io?nft=true", "https://wavect.io/official-nft/wavect_video.mp4", ".jpg", 100, MERKLE_ROOT);
 
@@ -82,6 +82,12 @@ contract WavectTest is Test {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
         wavect.setBaseURI("https://wavect.io/official-nft/logo_square.jpg");
+    }
+
+    function testNonOwnerSetReservedBaseURI() public {
+        vm.expectRevert("Ownable: caller is not the owner");
+        vm.prank(NONOWNER);
+        wavect.setReservedBaseURI("https://wavect.io/official-nft/dddd/");
     }
 
     function testNonOwnerSetReveal() public {
@@ -193,6 +199,12 @@ contract WavectTest is Test {
         vm.prank(OWNER);
         wavect.setBaseURI("https://wavect.io/official-nft/logo_square.jpg");
         assertEq(wavect.baseURI(), "https://wavect.io/official-nft/logo_square.jpg");
+    }
+
+    function testOwnerSetReservedBaseURI() public {
+        vm.prank(OWNER);
+        wavect.setReservedBaseURI("https://wavect.io/official-nft/dddd/");
+        assertEq(wavect.reservedBaseURI(), "https://wavect.io/official-nft/dddd/");
     }
 
     function testOwnerSetMintPrice() public {
@@ -445,7 +457,7 @@ contract WavectTest is Test {
         vm.expectRevert("Cannot be smaller");
         wavect.setTotalSupply(2);
 
-        wavect = new Wavect("https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "Wavect",
+        wavect = new Wavect("https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "https://wavect.io/official-nft/challenges/", "Wavect",
             "This NFT can be used to vote on podcast guests, topics and many other things. We also plan to release products in the near future, this NFT will give you then either a lifelong rebate or even allows you to use our products for free.",
             "https://wavect.io?nft=true", "https://wavect.io/official-nft/wavect_video.mp4", ".jpg", 2, MERKLE_ROOT);
         // for custom supply
@@ -648,8 +660,10 @@ contract WavectTest is Test {
         console.log(onchainMetadata);
 
         assertEq(wavect.revealed(), false); // reserved tokens should always be revealed
-        string memory onchainMetadataRevealed = wavect.tokenURI(0);
-        assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataRevealed))); // useful since non-revealed metadata is identical for regular tokens
+        string memory onchainMetadataSpecial = wavect.tokenURI(0);
+        console.log(onchainMetadataSpecial);
+
+        assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataSpecial))); // useful since non-revealed metadata is identical for regular tokens
         // must be different
 
 
