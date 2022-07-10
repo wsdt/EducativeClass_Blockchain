@@ -4,3 +4,5 @@ build/
 .openzeppelin/
 out/
 cache/
+deploy.sh
+.env

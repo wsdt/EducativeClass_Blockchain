@@ -9,11 +9,12 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/PullPayment.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import "@openzeppelin/contracts/utils/Multicall.sol";
 import "base64-sol/base64.sol";
 import "./AddRecover.sol";
 import "./LinearlyAssigned.sol";
 
-contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPayment, Pausable {
+contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPayment, Pausable, Multicall {
 
     /// @dev The first 3 tokenIDs are reserved for another use-case (giving incentives to do something good)
     uint256 public constant RESERVED_TOKENS = 3;

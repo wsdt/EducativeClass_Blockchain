@@ -10,6 +10,7 @@ contract WavectTest is Test {
     address constant OWNER = address(0x14791697260E4c9A71f18484C9f997B308e59325);
     bytes32[] OWNER_PROOF;
     bytes OWNER_SIG_EXAMPLE = hex"2a10fa3403560e476d7f93eebcfb24fb70b39c00407fae4a45f76d9233cff9cf5d1403b69de1ab688c9d78fd4394cb883c343269384d68468dbbe2c8bfaee2091c";
+    bytes FAULTY_SIG_EXAMPLE = hex"2a10fa3403560e476d7f93eebcfb24fb70b39c00407fae4a45f76d9233cff9cf5d1403b69de1ab688c9d78fd4394cb883c343269384d68468dbbe2c8bfaee2091d";
 
     address constant NONOWNER = address(1); // NOTE: the 0x01 address does not work always
     bytes32[] NONOWNER_PROOF;
@@ -599,6 +600,15 @@ contract WavectTest is Test {
         assertEq(wavect.usedRewardClaimNonces(0), false, "Nonce already used");
         vm.stopPrank();
 
+        vm.expectRevert("Invalid voucher");
+        vm.prank(OTHER);
+        wavect.claimRewardNFT(0, 0, OWNER_SIG_EXAMPLE);
+        assertEq(wavect.usedRewardClaimNonces(0), false, "Nonce already used");
+
+        vm.expectRevert("Invalid voucher");
+        vm.prank(OTHER_2);
+        wavect.claimRewardNFT(0, 0, FAULTY_SIG_EXAMPLE);
+        assertEq(wavect.usedRewardClaimNonces(0), false, "Nonce already used");
 
         console.log(string(abi.encodePacked()));
         vm.prank(OTHER_2);
@@ -607,14 +617,29 @@ contract WavectTest is Test {
         assertEq(wavect.balanceOf(OTHER_2), 1);
         assertEq(wavect.ownerOf(0), OTHER_2);
 
+        vm.expectRevert("Nonce used");
+        vm.prank(OTHER_2);
+        wavect.claimRewardNFT(0, 0, OWNER_SIG_EXAMPLE);
+
+        vm.expectRevert("Not reward token");
+        vm.prank(OTHER_2);
+        wavect.claimRewardNFT(firstTokenID, 0, OWNER_SIG_EXAMPLE);
+
+        assertEq(wavect.usedRewardClaimNonces(1), false, "Nonce already used");
+        vm.expectRevert("Invalid voucher");
+        vm.prank(OTHER_2);
+        wavect.claimRewardNFT(0, 1, OWNER_SIG_EXAMPLE);
+
 
         string memory onchainMetadata = wavect.tokenURI(firstTokenID);
         console.log(onchainMetadata);
 
         assertEq(wavect.revealed(), false); // reserved tokens should always be revealed
         string memory onchainMetadataRevealed = wavect.tokenURI(0);
-        assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataRevealed)));
+        assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataRevealed))); // useful since non-revealed metadata is identical for regular tokens
         // must be different
+
+
     }
 
     event Received(uint);
