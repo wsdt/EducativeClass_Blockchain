@@ -241,6 +241,12 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
         revealed = reveal_;
     }
 
+    /// @dev Convenience method, to avoid two separate transactions
+    function switchRevealState(bool reveal_, string memory baseURI_) external onlyOwner {
+        revealed = reveal_;
+        baseURI = baseURI_;
+    }
+
     /// @dev BaseURI is used for the image itself in this case, since the metadata itself lives on-chain
     function setBaseURI(string memory baseURI_) external onlyOwner {
         baseURI = baseURI_;

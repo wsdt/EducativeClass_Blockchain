@@ -114,6 +114,12 @@ contract WavectTest is Test {
         wavect.setMerkleRoot("");
     }
 
+    function testNonOwnerSwitchRevealState() public {
+        vm.expectRevert("Ownable: caller is not the owner");
+        vm.prank(NONOWNER);
+        wavect.switchRevealState(false, "");
+    }
+
     function testNonOwnerSetMetadataExtLink() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
@@ -211,6 +217,13 @@ contract WavectTest is Test {
         vm.prank(OWNER);
         wavect.setMerkleRoot("");
         assertEq(wavect.merkleRoot(), "");
+    }
+
+    function testOwnerSwitchRevealState() public {
+        vm.prank(OWNER);
+        wavect.switchRevealState(true, "localhost");
+        assertEq(wavect.revealed(), true);
+        assertEq(wavect.baseURI(), "localhost");
     }
 
     function testOwnerSetMetadataName() public {
