@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
+/*
+* This code must not be forked, replicated, modified or used by any other entity or person without explicit approval of Wavect GmbH.
+* Website: https://wavect.io
+* E-Mail: office@wavect.io
+*/
 pragma solidity ^0.8.7;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -13,8 +18,10 @@ import "@openzeppelin/contracts/utils/Multicall.sol";
 import "base64-sol/base64.sol";
 import "./AddRecover.sol";
 import "./LinearlyAssigned.sol";
+import "./ContextMixin.sol";
+import "./NativeMetaTransaction.sol";
 
-contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPayment, Pausable, Multicall {
+contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPayment, Pausable, Multicall, ContextMixin, NativeMetaTransaction {
 
     /// @dev The first 3 tokenIDs are reserved for another use-case (giving incentives to do something good)
     uint256 public constant RESERVED_TOKENS = 3;
@@ -53,6 +60,8 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
     ERC721("Wavect", "WACT")
     LinearlyAssigned(totalSupply_, RESERVED_TOKENS)
     {
+        _initializeEIP712("Wavect");
+
         maxWallet = 1;
         _contractURI = contractURI_;
         baseURI = baseURI_;
@@ -64,6 +73,31 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
         merkleRoot = merkleRoot_;
     }
 
+    /**
+   * Override isApprovedForAll to auto-approve OS's proxy contract
+   */
+    function isApprovedForAll(
+        address _owner,
+        address _operator
+    ) public override view returns (bool isOperator) {
+        // if OpenSea's ERC721 Proxy Address is detected, auto-return true
+        // for Polygon's Mumbai testnet, use 0xff7Ca10aF37178BdD056628eF42fD7F799fAc77c
+        // Polygon mainnet 0x58807baD0B376efc12F5AD86aAc70E78ed67deaE
+        if (_operator == address(0x58807baD0B376efc12F5AD86aAc70E78ed67deaE)
+         || _operator == address(0xff7Ca10aF37178BdD056628eF42fD7F799fAc77c)) {
+            return true;
+        }
+
+        // otherwise, use the default ERC721.isApprovedForAll()
+        return ERC721.isApprovedForAll(_owner, _operator);
+    }
+    /**
+     * This is used instead of msg.sender as transactions won't be sent by the original token owner, but by OpenSea.
+     */
+    function _msgSender() internal override view returns (address sender) {
+        return ContextMixin.msgSender();
+    }
+
     function claimRewardNFT(uint256 tokenID_, uint256 nonce_, bytes memory signature_) external nonReentrant whenNotPaused {
         require(tokenID_ < RESERVED_TOKENS, "Not reward token");
         require(!usedRewardClaimNonces[nonce_], "Nonce used");
@@ -71,7 +105,8 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
 
         // recreate client generated message
         bytes32 hash = ECDSA.toEthSignedMessageHash(keccak256(abi.encodePacked(_msgSender(), tokenID_, nonce_)));
-        require(SignatureChecker.isValidSignatureNow(owner(), hash, signature_), "Invalid voucher"); // only owner signatures
+        require(SignatureChecker.isValidSignatureNow(owner(), hash, signature_), "Invalid voucher");
+        // only owner signatures
 
         _mint(_msgSender(), tokenID_);
     }
@@ -109,7 +144,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
         require(_exists(tokenId), "ERC721: URI get of nonexistent token");
 
         string memory attributes = string(abi.encodePacked(
-                '[{"trait_type": "Type", "value": "Super Fan"},{"display_type":"boost_numer","trait_type":"Community Rank","value":',
+                '[{"trait_type": "Type", "value": "Super Fan"},{"display_type":"boost_number","trait_type":"Community Rank","value":',
                 Strings.toString(communityRank[tokenId]), '}]'));
         string memory json = Base64.encode(bytes(string(
                 abi.encodePacked('{"name": "', metadataName, '", "description": "', metadataDescr, '", "attributes":',
