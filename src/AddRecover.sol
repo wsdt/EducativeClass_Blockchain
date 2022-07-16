@@ -9,7 +9,7 @@ contract AddRecover is Ownable {
 
     /// @dev Recovers ERC20 tokens accidentally sent to the contract.
     function recoverERC20(address tokenAddress, uint256 tokenAmount) external onlyOwner {
-        require(IERC20(tokenAddress).transfer(owner(), tokenAmount));
+        IERC20(tokenAddress).transfer(owner(), tokenAmount);
     }
 
     /// @dev Recovers ERC721 tokens accidentally sent to the contract.

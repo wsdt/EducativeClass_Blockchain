@@ -6,8 +6,6 @@ import "../src/Wavect.sol";
 import "forge-std/console2.sol";
 
 contract WavectTest is Test {
-    address constant L0_ENDPOINT = address(42);
-
     Wavect wavect;
     address constant OWNER = address(0x14791697260E4c9A71f18484C9f997B308e59325);
     bytes32[] OWNER_PROOF;
@@ -47,7 +45,7 @@ contract WavectTest is Test {
         FAULTY_PROOF.push(bytes32(0x00));
 
         vm.prank(OWNER);
-        wavect = new Wavect(L0_ENDPOINT, "https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "https://wavect.io/official-nft/challenges/", "Wavect",
+        wavect = new Wavect("https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "https://wavect.io/official-nft/challenges/", "Wavect",
             "This NFT can be used to vote on podcast guests, topics and many other things. We also plan to release products in the near future, this NFT will give you then either a lifelong rebate or even allows you to use our products for free.",
             "https://wavect.io?nft=true", "https://wavect.io/official-nft/wavect_video.mp4", ".jpg", 100, MERKLE_ROOT);
 
@@ -459,7 +457,7 @@ contract WavectTest is Test {
         vm.expectRevert("Cannot be smaller");
         wavect.setTotalSupply(2);
 
-        wavect = new Wavect(L0_ENDPOINT, "https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "https://wavect.io/official-nft/challenges/", "Wavect",
+        wavect = new Wavect("https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "https://wavect.io/official-nft/challenges/", "Wavect",
             "This NFT can be used to vote on podcast guests, topics and many other things. We also plan to release products in the near future, this NFT will give you then either a lifelong rebate or even allows you to use our products for free.",
             "https://wavect.io?nft=true", "https://wavect.io/official-nft/wavect_video.mp4", ".jpg", 2, MERKLE_ROOT);
         // for custom supply
