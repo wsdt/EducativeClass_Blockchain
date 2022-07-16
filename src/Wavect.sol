@@ -20,8 +20,11 @@ import "./AddRecover.sol";
 import "./LinearlyAssigned.sol";
 import "./ContextMixin.sol";
 import "./NativeMetaTransaction.sol";
+import "@layer-zero/contracts/token/onft/IONFT721.sol";
+import "@layer-zero/contracts/token/onft/ONFT721Core.sol";
 
-contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPayment, Pausable, Multicall, ContextMixin, NativeMetaTransaction {
+contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPayment, Pausable,
+    Multicall, ContextMixin, NativeMetaTransaction, ONFT721Core, IONFT721 {
 
     /// @dev The first 3 tokenIDs are reserved for another use-case (giving incentives to do something good)
     uint256 public constant RESERVED_TOKENS = 3;
@@ -56,9 +59,10 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
     event RankDecreased(uint256 indexed tokenId, uint256 newRank);
     event RankReset(uint256 indexed tokenId);
 
-    constructor(string memory contractURI_, string memory baseURI_, string memory reservedBaseURI_, string memory metadataName_, string memory metadataDescr_,
+    constructor(address _lzEndpoint, string memory contractURI_, string memory baseURI_, string memory reservedBaseURI_, string memory metadataName_, string memory metadataDescr_,
         string memory metadataExtLink_, string memory metadataAnimationUrl_, string memory imgFileExt_, uint256 totalSupply_,
         bytes32 merkleRoot_)
+    ONFT721Core(_lzEndpoint)
     ERC721("Wavect", "WACT")
     LinearlyAssigned(totalSupply_, RESERVED_TOKENS)
     {
@@ -82,7 +86,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
     function isApprovedForAll(
         address _owner,
         address _operator
-    ) public override view returns (bool isOperator) {
+    ) public override(IERC721, ERC721) view returns (bool isOperator) {
         // if OpenSea's ERC721 Proxy Address is detected, auto-return true
         // for Polygon's Mumbai testnet, use 0xff7Ca10aF37178BdD056628eF42fD7F799fAc77c
         // Polygon mainnet 0x58807baD0B376efc12F5AD86aAc70E78ed67deaE
@@ -275,5 +279,19 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
 
     function setMetadataAnimationUrl(string memory metadataAnimationUrl_) external onlyOwner {
         metadataAnimationUrl = metadataAnimationUrl_;
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ONFT721Core, ERC721, IERC165) returns (bool) {
+        return interfaceId == type(IONFT721).interfaceId || super.supportsInterface(interfaceId);
+    }
+
+    function _debitFrom(address _from, uint16, bytes memory, uint _tokenId) internal virtual override {
+        require(_isApprovedOrOwner(_msgSender(), _tokenId), "ONFT721: send caller is not owner nor approved");
+        require(ERC721.ownerOf(_tokenId) == _from, "ONFT721: send from incorrect owner");
+        _burn(_tokenId);
+    }
+
+    function _creditTo(uint16, address _toAddress, uint _tokenId) internal virtual override {
+        _safeMint(_toAddress, _tokenId);
     }
 }
