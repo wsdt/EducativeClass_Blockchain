@@ -4,9 +4,11 @@ pragma solidity ^0.8.7;
 import "forge-std/Test.sol";
 import "../src/Wavect.sol";
 import "forge-std/console2.sol";
+import "@layer-zero/contracts/mocks/LZEndpointMock.sol";
 
 contract WavectTest is Test {
-    Wavect wavect;
+    Wavect wavectA;
+    Wavect wavectB;
     address constant OWNER = address(0x14791697260E4c9A71f18484C9f997B308e59325);
     bytes32[] OWNER_PROOF;
     bytes OWNER_SIG_EXAMPLE = hex"2a10fa3403560e476d7f93eebcfb24fb70b39c00407fae4a45f76d9233cff9cf5d1403b69de1ab688c9d78fd4394cb883c343269384d68468dbbe2c8bfaee2091c";
@@ -25,12 +27,18 @@ contract WavectTest is Test {
 
     bytes32 MERKLE_ROOT = 0x289eb88ae6a8930e137c767ec946fc9d80a02f04a32104b62a67cd6aad816d30;
 
+    uint16 constant LOCAL_CHAIN_ID = 31337;
+    address constant L0_ENDPOINT_DUMMY = address(42);
+    LZEndpointMock L0EndpointChainA;
+    LZEndpointMock L0EndpointChainB;
+
     /// @dev Where do we start, at 0 or do we have reserved tokens?
     uint256 firstTokenID;
 
     event RankIncreased(uint256 indexed tokenId, uint256 newRank);
     event RankDecreased(uint256 indexed tokenId, uint256 newRank);
     event RankReset(uint256 indexed tokenId);
+    event SendToChain(address _from, uint16 _dstChainId, address _toAddress, uint256 _tokenId, uint256 nonce);
 
     function setUp() public {
 
@@ -44,629 +52,544 @@ contract WavectTest is Test {
         OTHER_PROOF_2.push(0x0827f224e08cb622b4f65d2795452706e60cc2aaa0b8cd8143170f563b35e581);
         FAULTY_PROOF.push(bytes32(0x00));
 
-        vm.prank(OWNER);
-        wavect = new Wavect("https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "https://wavect.io/official-nft/challenges/", "Wavect",
-            "This NFT can be used to vote on podcast guests, topics and many other things. We also plan to release products in the near future, this NFT will give you then either a lifelong rebate or even allows you to use our products for free.",
-            "https://wavect.io?nft=true", "https://wavect.io/official-nft/wavect_video.mp4", ".jpg", 100, MERKLE_ROOT);
+        vm.startPrank(OWNER);
+        L0EndpointChainA = new LZEndpointMock(LOCAL_CHAIN_ID);
+        L0EndpointChainB = new LZEndpointMock(LOCAL_CHAIN_ID);
 
-        firstTokenID = wavect.RESERVED_TOKENS();
+        wavectA = new Wavect(address(L0EndpointChainA), "https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/metadata/1.json?debug=",
+            "Wavect", "WACT", ".json", 100, MERKLE_ROOT, true);
+        wavectB = new Wavect(address(L0EndpointChainB), "https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/metadata/1.json?debug=",
+            "Wavect", "WACT", ".json", 100, MERKLE_ROOT, false);
+
+        L0EndpointChainA.setDestLzEndpoint(address(wavectB), address(L0EndpointChainB));
+        L0EndpointChainB.setDestLzEndpoint(address(wavectA), address(L0EndpointChainA));
+
+        wavectA.setTrustedRemote(LOCAL_CHAIN_ID, abi.encodePacked(address(wavectB)));
+        wavectB.setTrustedRemote(LOCAL_CHAIN_ID, abi.encodePacked(address(wavectA)));
+        vm.stopPrank();
+
+        //uint16 chainID = uint16(wavect.getChainId());
+        //console.log(chainID);
+
+        firstTokenID = wavectA.RESERVED_TOKENS();
 
         vm.stopPrank();
+    }
+
+    function testLayerZeroBridging() public {
+        uint256 expectedTokenID = 3;
+
+        vm.prank(NONOWNER);
+        wavectA.mint(NONOWNER_PROOF);
+        assertEq(wavectA.balanceOf(NONOWNER), 1, "Could not mint");
+        wavectA.tokenURI(expectedTokenID);
+        // does not fail
+
+        vm.expectRevert("ERC721: invalid token ID");
+        wavectB.tokenURI(expectedTokenID);
+
+        vm.prank(NONOWNER);
+        wavectA.transferFrom(NONOWNER, OTHER, expectedTokenID);
+        assertEq(wavectA.balanceOf(NONOWNER), 0, "Could not transfer (1)");
+        assertEq(wavectA.balanceOf(OTHER), 1, "Could not transfer (2)");
+
+        vm.startPrank(OTHER);
+        wavectA.approve(address(wavectA), expectedTokenID);
+
+        wavectA.sendFrom(
+            OTHER,
+            LOCAL_CHAIN_ID,
+            abi.encodePacked(OTHER),
+            expectedTokenID,
+            payable(OTHER),
+            address(0),
+            ""
+        );
+
+        assertEq(wavectA.balanceOf(OTHER), 0, "Could not burn");
+        assertEq(wavectB.balanceOf(OTHER), 1, "Could not bridge"); // fails silently (ref Discord ticket L0)
+        vm.stopPrank();
+        /*
+        // can send to other onft contract eg. not the original nft contract chain
+        await ONFT_B.connect(warlock).sendFrom(
+            warlock.address,
+            chainId_A,
+            warlock.address,
+            tokenId,
+            warlock.address,
+            ethers.constants.AddressZero,
+            "0x"
+        )
+
+        // token is burned on the sending chain
+        await expect(ONFT_B.ownerOf(tokenId)).to.be.revertedWith("ERC721: operator query for nonexistent token")
+        */
     }
 
     function testNonOwnerSetContractURI() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
-        wavect.setContractURI("..");
+        wavectA.setContractURI("..");
     }
 
     function testNonOwnerSetMaxWallet() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
-        wavect.setMaxWallet(1);
+        wavectA.setMaxWallet(1);
     }
 
     function testNonOwnerSetMintPrice() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
-        wavect.setMintPrice(1);
+        wavectA.setMintPrice(1);
     }
 
-    function testNonOwnerSetImgFileExt() public {
+    function testNonOwnerSetMintEnabled() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
-        wavect.setImgFileExt(".jpg");
+        wavectA.setMintEnabled(false);
+    }
+
+    function testNonOwnerSetFileExt() public {
+        vm.expectRevert("Ownable: caller is not the owner");
+        vm.prank(NONOWNER);
+        wavectA.setFileExt(".json");
     }
 
     function testNonOwnerSetBaseURI() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
-        wavect.setBaseURI("https://wavect.io/official-nft/logo_square.jpg");
-    }
-
-    function testNonOwnerSetReservedBaseURI() public {
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.setReservedBaseURI("https://wavect.io/official-nft/dddd/");
-    }
-
-    function testNonOwnerSetReveal() public {
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.setReveal(false);
-    }
-
-    function testNonOwnerSetMetadataName() public {
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.setMetadataName("Wavect");
-    }
-
-    function testNonOwnerSetMetadataDescr() public {
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.setMetadataDescr("....");
+        wavectA.setBaseURI("https://wavect.io/official-nft/metadata/");
     }
 
     function testNonOwnerSetPublicSale() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
-        wavect.setPublicSale(true);
+        wavectA.setPublicSale(true);
     }
 
     function testNonOwnerSetMerkleRoot() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
-        wavect.setMerkleRoot("");
-    }
-
-    function testNonOwnerSwitchRevealState() public {
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.switchRevealState(false, "");
-    }
-
-    function testNonOwnerSetMetadataExtLink() public {
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.setMetadataExtLink("....");
-    }
-
-    function testNonOwnerSetMetadataAnimationUrl() public {
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.setMetadataAnimationUrl("....");
+        wavectA.setMerkleRoot("");
     }
 
     function testNonOwnerIncreaseRank() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
-        wavect.increaseRank(0);
-    }
-
-    function testNonOwnerIncreaseBulkRank() public {
-        uint256[] memory ids = new uint256[](2);
-        ids[0] = 0;
-        ids[1] = 1;
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.increaseRankBulk(ids);
+        wavectA.increaseRank(0);
     }
 
     function testNonOwnerDecreaseRank() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
-        wavect.decreaseRank(0);
-    }
-
-    function testNonOwnerDecreaseBulkRank() public {
-        uint256[] memory ids = new uint256[](2);
-        ids[0] = 0;
-        ids[1] = 1;
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.decreaseRankBulk(ids);
+        wavectA.decreaseRank(0);
     }
 
     function testNonOwnerResetRank() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
-        wavect.resetRank(0);
-    }
-
-    function testNonOwnerResetBulkRank() public {
-        uint256[] memory ids = new uint256[](2);
-        ids[0] = 0;
-        ids[1] = 1;
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.resetRankBulk(ids);
+        wavectA.resetRank(0);
     }
 
     function testOwnerSetMaxWallet() public {
         vm.prank(OWNER);
-        wavect.setMaxWallet(1);
-        assertEq(wavect.maxWallet(), 1);
+        wavectA.setMaxWallet(1);
+        assertEq(wavectA.maxWallet(), 1);
     }
 
-    function testOwnerSetImgFileExt() public {
+    function testOwnerSetFileExt() public {
         vm.prank(OWNER);
-        wavect.setImgFileExt(".jpg");
-        assertEq(wavect.imgFileExt(), ".jpg");
+        wavectA.setFileExt(".json");
+        assertEq(wavectA.fileExt(), ".json");
     }
 
     function testOwnerSetBaseURI() public {
         vm.prank(OWNER);
-        wavect.setBaseURI("https://wavect.io/official-nft/logo_square.jpg");
-        assertEq(wavect.baseURI(), "https://wavect.io/official-nft/logo_square.jpg");
-    }
-
-    function testOwnerSetReservedBaseURI() public {
-        vm.prank(OWNER);
-        wavect.setReservedBaseURI("https://wavect.io/official-nft/dddd/");
-        assertEq(wavect.reservedBaseURI(), "https://wavect.io/official-nft/dddd/");
+        wavectA.setBaseURI("https://wavect.io/official-nft/metadata/");
+        assertEq(wavectA.baseURI(), "https://wavect.io/official-nft/metadata/");
     }
 
     function testOwnerSetMintPrice() public {
         vm.prank(OWNER);
-        wavect.setMintPrice(1);
-        assertEq(wavect.mintPrice(), 1);
+        wavectA.setMintPrice(1);
+        assertEq(wavectA.mintPrice(), 1);
     }
 
-    function testOwnerSetReveal() public {
+    function testOwnerSetMintEnabled() public {
+        assertEq(wavectA.mintEnabled(), true);
         vm.prank(OWNER);
-        wavect.setReveal(false);
-        assertEq(wavect.revealed(), false);
+        wavectA.setMintEnabled(false);
+        assertEq(wavectA.mintEnabled(), false);
     }
 
     function testOwnerSetPublicSale() public {
         vm.prank(OWNER);
-        wavect.setPublicSale(true);
-        assertEq(wavect.publicSaleEnabled(), true);
+        wavectA.setPublicSale(true);
+        assertEq(wavectA.publicSaleEnabled(), true);
     }
 
     function testOwnerSetMerkleRoot() public {
         vm.prank(OWNER);
-        wavect.setMerkleRoot("");
-        assertEq(wavect.merkleRoot(), "");
-    }
-
-    function testOwnerSwitchRevealState() public {
-        vm.prank(OWNER);
-        wavect.switchRevealState(true, "localhost");
-        assertEq(wavect.revealed(), true);
-        assertEq(wavect.baseURI(), "localhost");
-    }
-
-    function testOwnerSetMetadataName() public {
-        vm.prank(OWNER);
-        wavect.setMetadataName("Wavect");
-        assertEq(wavect.metadataName(), "Wavect");
-    }
-
-    function testOwnerSetMetadataDescr() public {
-        vm.prank(OWNER);
-        wavect.setMetadataDescr("This NFT can be used to vote on podcast guests, topics and many other things. We also plan to release products in the near future, this NFT will give you then either a lifelong rebate or even allows you to use our products for free.");
-        assertEq(wavect.metadataDescr(), "This NFT can be used to vote on podcast guests, topics and many other things. We also plan to release products in the near future, this NFT will give you then either a lifelong rebate or even allows you to use our products for free.");
-    }
-
-    function testOwnerSetMetadataExtLink() public {
-        vm.prank(OWNER);
-        wavect.setMetadataExtLink("https://wavect.io?nft=true");
-        assertEq(wavect.metadataExtLink(), "https://wavect.io?nft=true");
+        wavectA.setMerkleRoot("");
+        assertEq(wavectA.merkleRoot(), "");
     }
 
     function testOwnerSetContractURI() public {
         vm.prank(OWNER);
-        wavect.setContractURI("https://wavect.io/official-nft/contract-metadata.json");
-        assertEq(wavect.contractURI(), "https://wavect.io/official-nft/contract-metadata.json");
-    }
-
-    function testOwnerSetMetadataAnimationUrl() public {
-        vm.prank(OWNER);
-        wavect.setMetadataAnimationUrl("https://wavect.io/official-nft/wavect_video.mp4");
-        assertEq(wavect.metadataAnimationUrl(), "https://wavect.io/official-nft/wavect_video.mp4");
+        wavectA.setContractURI("https://wavect.io/official-nft/contract-metadata.json");
+        assertEq(wavectA.contractURI(), "https://wavect.io/official-nft/contract-metadata.json");
     }
 
     function testOwnerIncreaseRankNonExistent() public {
         vm.expectRevert("Non existent");
         vm.prank(OWNER);
-        wavect.increaseRank(0);
+        wavectA.increaseRank(0);
     }
 
     function testOwnerDecreaseRankNonExistent() public {
         vm.expectRevert("Non existent");
         vm.prank(OWNER);
-        wavect.decreaseRank(0);
+        wavectA.decreaseRank(0);
     }
 
     function testOwnerResetRankNonExistent() public {
         vm.expectRevert("Non existent");
         vm.prank(OWNER);
-        wavect.resetRank(0);
+        wavectA.resetRank(0);
     }
 
     function testNonOwnerMint() public {
-        assertEq(wavect.balanceOf(NONOWNER), 0);
+        assertEq(wavectA.balanceOf(NONOWNER), 0);
         vm.startPrank(NONOWNER);
-        wavect.mint(NONOWNER_PROOF);
-        assertEq(wavect.balanceOf(NONOWNER), 1);
-        assertEq(wavect.ownerOf(firstTokenID), NONOWNER);
+        wavectA.mint(NONOWNER_PROOF);
+        assertEq(wavectA.balanceOf(NONOWNER), 1);
+        assertEq(wavectA.ownerOf(firstTokenID), NONOWNER);
         vm.expectRevert("Already minted");
-        wavect.mint(NONOWNER_PROOF);
+        wavectA.mint(NONOWNER_PROOF);
         vm.stopPrank();
         // used startPrank
     }
 
     function testOwnerMint() public {
-        assertEq(wavect.balanceOf(OWNER), 0);
+        assertEq(wavectA.balanceOf(OWNER), 0);
         vm.startPrank(OWNER);
-        wavect.mint(OWNER_PROOF);
-        assertEq(wavect.balanceOf(OWNER), 1);
-        assertEq(wavect.ownerOf(firstTokenID), OWNER);
+        wavectA.mint(OWNER_PROOF);
+        assertEq(wavectA.balanceOf(OWNER), 1);
+        assertEq(wavectA.ownerOf(firstTokenID), OWNER);
         vm.expectRevert("Already minted");
-        wavect.mint(OWNER_PROOF);
+        wavectA.mint(OWNER_PROOF);
         vm.stopPrank();
         // used startPrank
     }
 
     function testOther2Mint() public {
-        assertEq(wavect.balanceOf(OTHER_2), 0);
+        assertEq(wavectA.balanceOf(OTHER_2), 0);
         vm.startPrank(OTHER_2);
-        wavect.mint(OTHER_PROOF_2);
-        assertEq(wavect.balanceOf(OTHER_2), 1);
-        assertEq(wavect.ownerOf(firstTokenID), OTHER_2);
+        wavectA.mint(OTHER_PROOF_2);
+        assertEq(wavectA.balanceOf(OTHER_2), 1);
+        assertEq(wavectA.ownerOf(firstTokenID), OTHER_2);
         vm.expectRevert("Already minted");
-        wavect.mint(OTHER_PROOF_2);
+        wavectA.mint(OTHER_PROOF_2);
         vm.stopPrank();
         // used startPrank
     }
 
     function testOwnerIncreaseRank() public {
         vm.prank(NONOWNER);
-        wavect.mint(NONOWNER_PROOF);
-        assertEq(wavect.balanceOf(NONOWNER), 1);
+        wavectA.mint(NONOWNER_PROOF);
+        assertEq(wavectA.balanceOf(NONOWNER), 1);
 
         vm.startPrank(OWNER);
-        assertEq(wavect.communityRank(firstTokenID), 0);
-        wavect.increaseRank(firstTokenID);
-        assertEq(wavect.communityRank(firstTokenID), 1);
+        assertEq(wavectA.communityRank(firstTokenID), 0);
+        wavectA.increaseRank(firstTokenID);
+        assertEq(wavectA.communityRank(firstTokenID), 1);
 
         vm.expectEmit(true, true, false, false);
         emit RankIncreased(firstTokenID, 2);
-        wavect.increaseRank(firstTokenID);
-        assertEq(wavect.communityRank(firstTokenID), 2);
-        vm.stopPrank();
-    }
-
-    function testOwnerIncreaseBulkRank() public {
-        vm.prank(NONOWNER);
-        wavect.mint(NONOWNER_PROOF);
-        assertEq(wavect.balanceOf(NONOWNER), 1);
-        vm.prank(OTHER);
-        wavect.mint(OTHER_PROOF);
-        assertEq(wavect.balanceOf(OTHER), 1);
-
-        vm.startPrank(OWNER);
-        uint256[] memory ids = new uint256[](2);
-        ids[0] = firstTokenID;
-        ids[1] = firstTokenID+1;
-
-        assertEq(wavect.communityRank(ids[0]), 0);
-        assertEq(wavect.communityRank(ids[1]), 0);
-        wavect.increaseRankBulk(ids);
-        assertEq(wavect.communityRank(ids[0]), 1);
-        assertEq(wavect.communityRank(ids[1]), 1);
-        vm.stopPrank();
-    }
-
-    function testOwnerDecreaseBulkRank() public {
-        vm.prank(NONOWNER);
-        wavect.mint(NONOWNER_PROOF);
-        assertEq(wavect.balanceOf(NONOWNER), 1);
-        vm.prank(OTHER);
-        wavect.mint(OTHER_PROOF);
-        assertEq(wavect.balanceOf(OTHER), 1);
-
-        vm.startPrank(OWNER);
-        uint256[] memory ids = new uint256[](2);
-        ids[0] = firstTokenID;
-        ids[1] = firstTokenID+1;
-
-        assertEq(wavect.communityRank(ids[0]), 0);
-        assertEq(wavect.communityRank(ids[1]), 0);
-
-
-        // decreasing below 0 fails by default in new solidity versions.
-
-        wavect.increaseRankBulk(ids);
-        assertEq(wavect.communityRank(ids[0]), 1);
-        assertEq(wavect.communityRank(ids[1]), 1);
-
-        wavect.decreaseRankBulk(ids);
-
-        assertEq(wavect.communityRank(ids[0]), 0);
-        assertEq(wavect.communityRank(ids[1]), 0);
+        wavectA.increaseRank(firstTokenID);
+        assertEq(wavectA.communityRank(firstTokenID), 2);
         vm.stopPrank();
     }
 
     function testOwnerDecreaseRank() public {
         vm.prank(NONOWNER);
-        wavect.mint(NONOWNER_PROOF);
-        assertEq(wavect.balanceOf(NONOWNER), 1, "Mint failed");
+        wavectA.mint(NONOWNER_PROOF);
+        assertEq(wavectA.balanceOf(NONOWNER), 1, "Mint failed");
         vm.startPrank(OWNER);
-        assertEq(wavect.communityRank(firstTokenID), 0, "Initial rank wrong");
-        wavect.increaseRank(firstTokenID);
-        assertEq(wavect.communityRank(firstTokenID), 1, "Rank increase failed");
+        assertEq(wavectA.communityRank(firstTokenID), 0, "Initial rank wrong");
+        wavectA.increaseRank(firstTokenID);
+        assertEq(wavectA.communityRank(firstTokenID), 1, "Rank increase failed");
 
         vm.expectEmit(true, true, false, false);
         emit RankDecreased(firstTokenID, 1);
-        wavect.decreaseRank(firstTokenID);
-        assertEq(wavect.communityRank(firstTokenID), 0, "Decrease failed");
+        wavectA.decreaseRank(firstTokenID);
+        assertEq(wavectA.communityRank(firstTokenID), 0, "Decrease failed");
         vm.stopPrank();
     }
 
     function testOwnerResetRank() public {
         vm.prank(NONOWNER);
-        wavect.mint(NONOWNER_PROOF);
-        assertEq(wavect.balanceOf(NONOWNER), 1);
+        wavectA.mint(NONOWNER_PROOF);
+        assertEq(wavectA.balanceOf(NONOWNER), 1);
         vm.startPrank(OWNER);
-        assertEq(wavect.communityRank(firstTokenID), 0);
-        wavect.increaseRank(firstTokenID);
-        wavect.increaseRank(firstTokenID);
-        assertEq(wavect.communityRank(firstTokenID), 2);
+        assertEq(wavectA.communityRank(firstTokenID), 0);
+        wavectA.increaseRank(firstTokenID);
+        wavectA.increaseRank(firstTokenID);
+        assertEq(wavectA.communityRank(firstTokenID), 2);
 
         vm.expectEmit(true, false, false, false);
         emit RankReset(firstTokenID);
-        wavect.resetRank(firstTokenID);
-        assertEq(wavect.communityRank(firstTokenID), 0);
+        wavectA.resetRank(firstTokenID);
+        assertEq(wavectA.communityRank(firstTokenID), 0);
         vm.stopPrank();
     }
 
-    function testOwnerResetBulkRank() public {
+    function testMintEnabled() public {
+        assertEq(wavectA.mintEnabled(), true);
+
         vm.prank(NONOWNER);
-        wavect.mint(NONOWNER_PROOF);
-        assertEq(wavect.balanceOf(NONOWNER), 1);
+        wavectA.mint(NONOWNER_PROOF);
+        vm.prank(OWNER);
+        wavectA.setMintEnabled(false);
+
+        vm.expectRevert("Mint disabled");
         vm.prank(OTHER);
-        wavect.mint(OTHER_PROOF);
-        assertEq(wavect.balanceOf(OTHER), 1);
+        wavectA.mint(OTHER_PROOF);
 
-        vm.startPrank(OWNER);
-        uint256[] memory ids = new uint256[](2);
-        ids[0] = firstTokenID;
-        ids[1] = firstTokenID+1;
-
-        assertEq(wavect.communityRank(ids[0]), 0);
-        assertEq(wavect.communityRank(ids[1]), 0);
-
-        wavect.increaseRankBulk(ids);
-        wavect.increaseRankBulk(ids);
-        assertEq(wavect.communityRank(ids[0]), 2);
-        assertEq(wavect.communityRank(ids[1]), 2);
-
-        wavect.resetRankBulk(ids);
-
-        assertEq(wavect.communityRank(ids[0]), 0);
-        assertEq(wavect.communityRank(ids[1]), 0);
-        vm.stopPrank();
+        vm.prank(OTHER_2);
+        wavectA.claimRewardNFT(0, 0, OWNER_SIG_EXAMPLE);
     }
 
     function testTotalSupply() public {
-        assertEq(wavect.totalSupply(), 100, "Invalid total supply (1)");
+        assertEq(wavectA.totalSupply(), 100, "Invalid total supply (1)");
         vm.startPrank(OWNER);
         vm.expectRevert("Cannot be smaller");
-        wavect.setTotalSupply(2);
+        wavectA.setTotalSupply(2);
 
-        wavect = new Wavect("https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "https://wavect.io/official-nft/challenges/", "Wavect",
-            "This NFT can be used to vote on podcast guests, topics and many other things. We also plan to release products in the near future, this NFT will give you then either a lifelong rebate or even allows you to use our products for free.",
-            "https://wavect.io?nft=true", "https://wavect.io/official-nft/wavect_video.mp4", ".jpg", 2, MERKLE_ROOT);
+        wavectA = new Wavect(L0_ENDPOINT_DUMMY, "https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/metadata/1.json?debug=",
+            "Wavect", "WACT", ".json", 2, MERKLE_ROOT, true);
         // for custom supply
 
-        assertEq(wavect.totalSupply(), 2, "Invalid total supply (2)");
-        wavect.mint(OWNER_PROOF);
-        assertEq(wavect.balanceOf(OWNER), 1);
-        assertEq(wavect.ownerOf(firstTokenID), OWNER);
+        assertEq(wavectA.totalSupply(), 2, "Invalid total supply (2)");
+        wavectA.mint(OWNER_PROOF);
+        assertEq(wavectA.balanceOf(OWNER), 1);
+        assertEq(wavectA.ownerOf(firstTokenID), OWNER);
         vm.stopPrank();
         vm.prank(NONOWNER);
-        wavect.mint(NONOWNER_PROOF);
-        assertEq(wavect.balanceOf(NONOWNER), 1);
-        assertEq(wavect.ownerOf(firstTokenID+1), NONOWNER);
+        wavectA.mint(NONOWNER_PROOF);
+        assertEq(wavectA.balanceOf(NONOWNER), 1);
+        assertEq(wavectA.ownerOf(firstTokenID + 1), NONOWNER);
         vm.expectRevert("No more tokens available");
         vm.prank(OTHER);
-        wavect.mint(OTHER_PROOF);
-        assertEq(wavect.balanceOf(OTHER), 0);
+        wavectA.mint(OTHER_PROOF);
+        assertEq(wavectA.balanceOf(OTHER), 0);
 
         vm.startPrank(OWNER);
-        wavect.setTotalSupply(3);
-        wavect.freezeTotalSupply();
+        wavectA.setTotalSupply(3);
+        wavectA.freezeTotalSupply();
         vm.expectRevert("Supply frozen");
-        wavect.setTotalSupply(100);
+        wavectA.setTotalSupply(100);
         vm.stopPrank();
 
         vm.prank(OTHER);
-        wavect.mint(OTHER_PROOF);
-        assertEq(wavect.balanceOf(OTHER), 1);
-        assertEq(wavect.ownerOf(firstTokenID+2), OTHER);
+        wavectA.mint(OTHER_PROOF);
+        assertEq(wavectA.balanceOf(OTHER), 1);
+        assertEq(wavectA.ownerOf(firstTokenID + 2), OTHER);
 
         vm.expectRevert("No more tokens available");
         vm.prank(OTHER_2);
-        wavect.mint(OTHER_PROOF_2);
+        wavectA.mint(OTHER_PROOF_2);
     }
 
     function testMetadata() public {
-        assertEq(wavect.balanceOf(NONOWNER), 0);
+        assertEq(wavectA.balanceOf(NONOWNER), 0);
         vm.prank(NONOWNER);
-        wavect.mint(NONOWNER_PROOF);
-        assertEq(wavect.balanceOf(NONOWNER), 1);
-        assertEq(wavect.ownerOf(firstTokenID), NONOWNER);
+        wavectA.mint(NONOWNER_PROOF);
+        assertEq(wavectA.balanceOf(NONOWNER), 1);
+        assertEq(wavectA.ownerOf(firstTokenID), NONOWNER);
 
-        string memory onchainMetadata = wavect.tokenURI(firstTokenID);
+        string memory onchainMetadata = wavectA.tokenURI(firstTokenID);
         console.log(onchainMetadata);
 
+        assertEq(wavectA.fileExt(), ".json");
         vm.prank(OWNER);
-        wavect.setReveal(true);
-        string memory onchainMetadataRevealed = wavect.tokenURI(firstTokenID);
-        assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataRevealed)));
+        wavectA.setFileExt("");
+        assertEq(wavectA.fileExt(), "");
+
+        string memory onchainMetadataFileExt = wavectA.tokenURI(firstTokenID);
+        assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataFileExt)));
         // must be different
     }
 
     function testWhitelist() public {
-        assertEq(wavect.balanceOf(OTHER_2), 0);
+        assertEq(wavectA.balanceOf(OTHER_2), 0);
         vm.prank(OTHER_2);
-        wavect.mint(OTHER_PROOF_2);
-        assertEq(wavect.balanceOf(OTHER_2), 1);
+        wavectA.mint(OTHER_PROOF_2);
+        assertEq(wavectA.balanceOf(OTHER_2), 1);
 
         vm.startPrank(OWNER);
         vm.expectRevert("Invalid proof");
-        wavect.mint(NONOWNER_PROOF);
+        wavectA.mint(NONOWNER_PROOF);
         vm.expectRevert("Invalid proof");
-        wavect.mint(FAULTY_PROOF);
-        wavect.setPublicSale(true);
-        wavect.mint(FAULTY_PROOF);
+        wavectA.mint(FAULTY_PROOF);
+        wavectA.setPublicSale(true);
+        wavectA.mint(FAULTY_PROOF);
         vm.expectRevert("Already minted");
-        wavect.mint(FAULTY_PROOF);
-        wavect.safeTransferFrom(OWNER, NONOWNER, firstTokenID+1);
+        wavectA.mint(FAULTY_PROOF);
+        wavectA.safeTransferFrom(OWNER, NONOWNER, firstTokenID + 1);
         vm.expectRevert("Already minted");
-        wavect.mint(FAULTY_PROOF);
+        wavectA.mint(FAULTY_PROOF);
         vm.stopPrank();
     }
 
     function testPrice() public {
-        assertEq(wavect.balanceOf(OTHER_2), 0);
+        assertEq(wavectA.balanceOf(OTHER_2), 0);
         vm.prank(OTHER_2);
-        wavect.mint(OTHER_PROOF_2);
+        wavectA.mint(OTHER_PROOF_2);
         // for free
-        assertEq(wavect.balanceOf(OTHER_2), 1);
+        assertEq(wavectA.balanceOf(OTHER_2), 1);
 
-        vm.startPrank(OWNER);
-        wavect.setMintPrice(0.1 ether);
-        assertEq(wavect.balanceOf(OWNER), 0);
+        vm.prank(OWNER);
+        wavectA.setMintPrice(0.1 ether);
+        assertEq(wavectA.balanceOf(OWNER), 0);
         vm.expectRevert("Payment too low");
-        wavect.mint(OWNER_PROOF);
+        vm.prank(NONOWNER);
+        wavectA.mint(OWNER_PROOF);
 
-        vm.deal(OWNER, 0.1 ether);
-        wavect.mint{value : 0.1 ether}(OWNER_PROOF);
-        assertEq(wavect.balanceOf(OWNER), 1);
+        vm.deal(NONOWNER, 0.15 ether);
+        vm.prank(NONOWNER);
+        wavectA.mint{value : 0.15 ether}(NONOWNER_PROOF);
+        assertEq(wavectA.balanceOf(NONOWNER), 1);
 
-        assertEq(address(wavect).balance, 0.1 ether);
-        wavect.withdrawRevenue(OTHER);
-        assertEq(address(OTHER).balance, 0.1 ether);
-        assertEq(address(wavect).balance, 0 ether);
+        assertEq(address(wavectA).balance, 0 ether, "Should not have balance (1-0)");
+        // because it is on Escrow
+        wavectA.withdrawPayments(payable(OWNER));
+        wavectA.withdrawPayments(payable(NONOWNER));
+        assertEq(address(OWNER).balance, 0.1 ether, "Should receive payment (1-0)");
+        assertEq(address(NONOWNER).balance, 0.05 ether, "Should receive payment (1-1)");
+        assertEq(address(wavectA).balance, 0 ether, "Should not have balance (1-1)");
 
-        vm.expectRevert("No balance");
-        wavect.withdrawRevenue(OTHER);
-        vm.stopPrank();
-
-        vm.expectRevert("Ownable: caller is not the owner");
+        vm.deal(OTHER, 0.1 ether);
         vm.prank(OTHER);
-        wavect.withdrawRevenue(OWNER);
+        wavectA.mint{value : 0.1 ether}(OTHER_PROOF);
+
+        vm.prank(OTHER);
+        wavectA.withdrawPayments(payable(OTHER));
+        assertEq(address(wavectA).balance, 0 ether, "Should not have balance (2)");
+        // on escrow
+        assertEq(address(OTHER).balance, 0 ether, "Should not get payment (2)");
     }
 
     function testPullPayment() public {
         vm.prank(OWNER);
-        wavect.setMintPrice(0.1 ether);
-        assertEq(wavect.balanceOf(OWNER), 0);
+        wavectA.setMintPrice(0.1 ether);
+        assertEq(wavectA.balanceOf(OWNER), 0);
 
         vm.deal(NONOWNER, 1 ether);
         vm.prank(NONOWNER);
-        wavect.mint{value : 1 ether}(NONOWNER_PROOF);
-        assertEq(wavect.balanceOf(NONOWNER), 1);
+        wavectA.mint{value : 1 ether}(NONOWNER_PROOF);
+        assertEq(wavectA.balanceOf(NONOWNER), 1);
         assertEq(address(NONOWNER).balance, 0 ether);
 
         vm.prank(OTHER_2);
-        wavect.withdrawPayments(payable(OTHER_2));
+        wavectA.withdrawPayments(payable(OTHER_2));
         assertEq(address(OTHER_2).balance, 0 ether);
-
-        vm.prank(NONOWNER);
-        wavect.withdrawPayments(payable(NONOWNER));
-        assertEq(address(NONOWNER).balance, 0.9 ether);
-        assertEq(address(wavect).balance, 0.1 ether);
-
-        vm.prank(OWNER);
-        wavect.withdrawRevenue(OTHER);
-        assertEq(address(OTHER).balance, 0.1 ether);
-        assertEq(address(wavect).balance, 0 ether);
-
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.withdrawRevenue(OWNER);
     }
 
     function testPausable() public {
-        assertEq(wavect.balanceOf(NONOWNER), 0);
+        assertEq(wavectA.balanceOf(NONOWNER), 0);
         vm.startPrank(NONOWNER);
-        wavect.mint(NONOWNER_PROOF);
-        assertEq(wavect.balanceOf(NONOWNER), 1);
-        assertEq(wavect.ownerOf(firstTokenID), NONOWNER);
+        wavectA.mint(NONOWNER_PROOF);
+        assertEq(wavectA.balanceOf(NONOWNER), 1);
+        assertEq(wavectA.ownerOf(firstTokenID), NONOWNER);
         vm.stopPrank();
 
         vm.prank(OWNER);
-        wavect.setPaused(true);
-        assertEq(wavect.balanceOf(OWNER), 0);
+        wavectA.setPaused(true);
+        assertEq(wavectA.balanceOf(OWNER), 0);
         vm.expectRevert("Pausable: paused");
-        wavect.mint(OWNER_PROOF);
+        wavectA.mint(OWNER_PROOF);
 
         vm.expectRevert("Pausable: paused");
-        wavect.claimRewardNFT(firstTokenID, 0, "");
+        wavectA.claimRewardNFT(firstTokenID, 0, "");
     }
 
     function testImproveTokens() public {
-        assertEq(wavect.RESERVED_TOKENS(), 3, "Unexpected amount of reserved tokens");
-        assertEq(wavect.SOLIDARITY_ID(), 0, "Unexpected Solidarity ID");
-        assertEq(wavect.ENVIRONMENT_ID(), 1, "Unexpected Environment ID");
-        assertEq(wavect.HEALTH_ID(), 2, "Unexpected Health ID");
+        assertEq(wavectA.RESERVED_TOKENS(), 3, "Unexpected amount of reserved tokens");
+        assertEq(wavectA.SOLIDARITY_ID(), 0, "Unexpected Solidarity ID");
+        assertEq(wavectA.ENVIRONMENT_ID(), 1, "Unexpected Environment ID");
+        assertEq(wavectA.HEALTH_ID(), 2, "Unexpected Health ID");
 
         vm.startPrank(NONOWNER);
-        wavect.mint(NONOWNER_PROOF);
-        assertEq(wavect.balanceOf(NONOWNER), 1);
-        assertEq(wavect.ownerOf(firstTokenID), NONOWNER);
+        wavectA.mint(NONOWNER_PROOF);
+        assertEq(wavectA.balanceOf(NONOWNER), 1);
+        assertEq(wavectA.ownerOf(firstTokenID), NONOWNER);
         assertEq(firstTokenID, 3);
 
-        assertEq(wavect.usedRewardClaimNonces(0), false, "Nonce already used");
+        assertEq(wavectA.usedRewardClaimNonces(0), false, "Nonce already used");
         vm.stopPrank();
 
         vm.expectRevert("Invalid voucher");
         vm.prank(OTHER);
-        wavect.claimRewardNFT(0, 0, OWNER_SIG_EXAMPLE);
-        assertEq(wavect.usedRewardClaimNonces(0), false, "Nonce already used");
+        wavectA.claimRewardNFT(0, 0, OWNER_SIG_EXAMPLE);
+        assertEq(wavectA.usedRewardClaimNonces(0), false, "Nonce already used");
 
         vm.expectRevert("Invalid voucher");
         vm.prank(OTHER_2);
-        wavect.claimRewardNFT(0, 0, FAULTY_SIG_EXAMPLE);
-        assertEq(wavect.usedRewardClaimNonces(0), false, "Nonce already used");
+        wavectA.claimRewardNFT(0, 0, FAULTY_SIG_EXAMPLE);
+        assertEq(wavectA.usedRewardClaimNonces(0), false, "Nonce already used");
 
         console.log(string(abi.encodePacked()));
         vm.prank(OTHER_2);
-        wavect.claimRewardNFT(0, 0, OWNER_SIG_EXAMPLE);
-        assertEq(wavect.usedRewardClaimNonces(0), true, "Nonce not used");
-        assertEq(wavect.balanceOf(OTHER_2), 1);
-        assertEq(wavect.ownerOf(0), OTHER_2);
+        wavectA.claimRewardNFT(0, 0, OWNER_SIG_EXAMPLE);
+        assertEq(wavectA.usedRewardClaimNonces(0), true, "Nonce not used");
+        assertEq(wavectA.balanceOf(OTHER_2), 1);
+        assertEq(wavectA.ownerOf(0), OTHER_2);
 
         vm.expectRevert("Nonce used");
         vm.prank(OTHER_2);
-        wavect.claimRewardNFT(0, 0, OWNER_SIG_EXAMPLE);
+        wavectA.claimRewardNFT(0, 0, OWNER_SIG_EXAMPLE);
 
         vm.expectRevert("Not reward token");
         vm.prank(OTHER_2);
-        wavect.claimRewardNFT(firstTokenID, 0, OWNER_SIG_EXAMPLE);
+        wavectA.claimRewardNFT(firstTokenID, 0, OWNER_SIG_EXAMPLE);
 
-        assertEq(wavect.usedRewardClaimNonces(1), false, "Nonce already used");
+        assertEq(wavectA.usedRewardClaimNonces(1), false, "Nonce already used");
         vm.expectRevert("Invalid voucher");
         vm.prank(OTHER_2);
-        wavect.claimRewardNFT(0, 1, OWNER_SIG_EXAMPLE);
+        wavectA.claimRewardNFT(0, 1, OWNER_SIG_EXAMPLE);
 
 
-        string memory onchainMetadata = wavect.tokenURI(firstTokenID);
+        string memory onchainMetadata = wavectA.tokenURI(firstTokenID);
         console.log(onchainMetadata);
 
-        assertEq(wavect.revealed(), false); // reserved tokens should always be revealed
-        string memory onchainMetadataSpecial = wavect.tokenURI(0);
+        string memory onchainMetadataSpecial = wavectA.tokenURI(0);
         console.log(onchainMetadataSpecial);
 
-        assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataSpecial))); // useful since non-revealed metadata is identical for regular tokens
+        assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataSpecial)));
+        // useful since non-revealed metadata is identical for regular tokens
         // must be different
+    }
 
+    function testIsApprovedAll() public {
+        address OS_1 = address(0x58807baD0B376efc12F5AD86aAc70E78ed67deaE);
+        address OS_2 = address(0xff7Ca10aF37178BdD056628eF42fD7F799fAc77c);
 
+        vm.startPrank(NONOWNER);
+        assertEq(wavectA.isApprovedForAll(NONOWNER, OWNER), false, "Should not be approved (1)");
+        wavectA.setApprovalForAll(OWNER, true);
+        assertEq(wavectA.isApprovedForAll(NONOWNER, OWNER), true, "Should be approved (1)");
+        wavectA.setApprovalForAll(OWNER, false);
+        assertEq(wavectA.isApprovedForAll(NONOWNER, OWNER), false, "Should not be approved (2)");
+
+        assertEq(wavectA.isApprovedForAll(NONOWNER, OS_1), true, "OS should be approved (1)");
+        assertEq(wavectA.isApprovedForAll(NONOWNER, OS_2), true, "OS should be approved (2)");
+        wavectA.setApprovalForAll(OS_1, false);
+        wavectA.setApprovalForAll(OS_2, false);
+        assertEq(wavectA.isApprovedForAll(NONOWNER, OS_1), true, "OS should be approved (3)");
+        assertEq(wavectA.isApprovedForAll(NONOWNER, OS_2), true, "OS should be approved (4)");
+        vm.stopPrank();
     }
 
     event Received(uint);
