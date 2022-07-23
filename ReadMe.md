@@ -1,8 +1,8 @@
 100 Spots
 -> 3 Categories: 
 
-1. SuperFan (20 Stk.)
--> Hand-picked
+# Layer Zero
+ChainIDs are not the EVM chainIds since also non EVM chains are supported by them!
 
-2. Fan (30 Stk.)
-3. Advocate (50 Stk.)
+Mainnet: https://layerzero.gitbook.io/docs/technical-reference/mainnet/supported-chain-ids
+Testnet: https://layerzero.gitbook.io/docs/technical-reference/testnet/testnet-addresses
