@@ -25,6 +25,8 @@ contract WavectTest is Test {
 
     bytes32 MERKLE_ROOT = 0x289eb88ae6a8930e137c767ec946fc9d80a02f04a32104b62a67cd6aad816d30;
 
+    address constant L0_ENDPOINT = address(42);
+
     /// @dev Where do we start, at 0 or do we have reserved tokens?
     uint256 firstTokenID;
 
@@ -45,9 +47,8 @@ contract WavectTest is Test {
         FAULTY_PROOF.push(bytes32(0x00));
 
         vm.prank(OWNER);
-        wavect = new Wavect("https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "https://wavect.io/official-nft/challenges/", "Wavect",
-            "This NFT can be used to vote on podcast guests, topics and many other things. We also plan to release products in the near future, this NFT will give you then either a lifelong rebate or even allows you to use our products for free.",
-            "https://wavect.io?nft=true", "https://wavect.io/official-nft/wavect_video.mp4", ".jpg", 100, MERKLE_ROOT);
+        wavect = new Wavect(L0_ENDPOINT, "https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/metadata/1.json?debug=",
+            "Wavect", "WACT", ".json", 100, MERKLE_ROOT);
 
         firstTokenID = wavect.RESERVED_TOKENS();
 
@@ -72,40 +73,16 @@ contract WavectTest is Test {
         wavect.setMintPrice(1);
     }
 
-    function testNonOwnerSetImgFileExt() public {
+    function testNonOwnerSetFileExt() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
-        wavect.setImgFileExt(".jpg");
+        wavect.setFileExt(".json");
     }
 
     function testNonOwnerSetBaseURI() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
-        wavect.setBaseURI("https://wavect.io/official-nft/logo_square.jpg");
-    }
-
-    function testNonOwnerSetReservedBaseURI() public {
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.setReservedBaseURI("https://wavect.io/official-nft/dddd/");
-    }
-
-    function testNonOwnerSetReveal() public {
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.setReveal(false);
-    }
-
-    function testNonOwnerSetMetadataName() public {
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.setMetadataName("Wavect");
-    }
-
-    function testNonOwnerSetMetadataDescr() public {
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.setMetadataDescr("....");
+        wavect.setBaseURI("https://wavect.io/official-nft/metadata/");
     }
 
     function testNonOwnerSetPublicSale() public {
@@ -120,37 +97,10 @@ contract WavectTest is Test {
         wavect.setMerkleRoot("");
     }
 
-    function testNonOwnerSwitchRevealState() public {
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.switchRevealState(false, "");
-    }
-
-    function testNonOwnerSetMetadataExtLink() public {
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.setMetadataExtLink("....");
-    }
-
-    function testNonOwnerSetMetadataAnimationUrl() public {
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.setMetadataAnimationUrl("....");
-    }
-
     function testNonOwnerIncreaseRank() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
         wavect.increaseRank(0);
-    }
-
-    function testNonOwnerIncreaseBulkRank() public {
-        uint256[] memory ids = new uint256[](2);
-        ids[0] = 0;
-        ids[1] = 1;
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.increaseRankBulk(ids);
     }
 
     function testNonOwnerDecreaseRank() public {
@@ -159,28 +109,10 @@ contract WavectTest is Test {
         wavect.decreaseRank(0);
     }
 
-    function testNonOwnerDecreaseBulkRank() public {
-        uint256[] memory ids = new uint256[](2);
-        ids[0] = 0;
-        ids[1] = 1;
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.decreaseRankBulk(ids);
-    }
-
     function testNonOwnerResetRank() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
         wavect.resetRank(0);
-    }
-
-    function testNonOwnerResetBulkRank() public {
-        uint256[] memory ids = new uint256[](2);
-        ids[0] = 0;
-        ids[1] = 1;
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.resetRankBulk(ids);
     }
 
     function testOwnerSetMaxWallet() public {
@@ -189,34 +121,22 @@ contract WavectTest is Test {
         assertEq(wavect.maxWallet(), 1);
     }
 
-    function testOwnerSetImgFileExt() public {
+    function testOwnerSetFileExt() public {
         vm.prank(OWNER);
-        wavect.setImgFileExt(".jpg");
-        assertEq(wavect.imgFileExt(), ".jpg");
+        wavect.setFileExt(".json");
+        assertEq(wavect.fileExt(), ".json");
     }
 
     function testOwnerSetBaseURI() public {
         vm.prank(OWNER);
-        wavect.setBaseURI("https://wavect.io/official-nft/logo_square.jpg");
-        assertEq(wavect.baseURI(), "https://wavect.io/official-nft/logo_square.jpg");
-    }
-
-    function testOwnerSetReservedBaseURI() public {
-        vm.prank(OWNER);
-        wavect.setReservedBaseURI("https://wavect.io/official-nft/dddd/");
-        assertEq(wavect.reservedBaseURI(), "https://wavect.io/official-nft/dddd/");
+        wavect.setBaseURI("https://wavect.io/official-nft/metadata/");
+        assertEq(wavect.baseURI(), "https://wavect.io/official-nft/metadata/");
     }
 
     function testOwnerSetMintPrice() public {
         vm.prank(OWNER);
         wavect.setMintPrice(1);
         assertEq(wavect.mintPrice(), 1);
-    }
-
-    function testOwnerSetReveal() public {
-        vm.prank(OWNER);
-        wavect.setReveal(false);
-        assertEq(wavect.revealed(), false);
     }
 
     function testOwnerSetPublicSale() public {
@@ -231,41 +151,10 @@ contract WavectTest is Test {
         assertEq(wavect.merkleRoot(), "");
     }
 
-    function testOwnerSwitchRevealState() public {
-        vm.prank(OWNER);
-        wavect.switchRevealState(true, "localhost");
-        assertEq(wavect.revealed(), true);
-        assertEq(wavect.baseURI(), "localhost");
-    }
-
-    function testOwnerSetMetadataName() public {
-        vm.prank(OWNER);
-        wavect.setMetadataName("Wavect");
-        assertEq(wavect.metadataName(), "Wavect");
-    }
-
-    function testOwnerSetMetadataDescr() public {
-        vm.prank(OWNER);
-        wavect.setMetadataDescr("This NFT can be used to vote on podcast guests, topics and many other things. We also plan to release products in the near future, this NFT will give you then either a lifelong rebate or even allows you to use our products for free.");
-        assertEq(wavect.metadataDescr(), "This NFT can be used to vote on podcast guests, topics and many other things. We also plan to release products in the near future, this NFT will give you then either a lifelong rebate or even allows you to use our products for free.");
-    }
-
-    function testOwnerSetMetadataExtLink() public {
-        vm.prank(OWNER);
-        wavect.setMetadataExtLink("https://wavect.io?nft=true");
-        assertEq(wavect.metadataExtLink(), "https://wavect.io?nft=true");
-    }
-
     function testOwnerSetContractURI() public {
         vm.prank(OWNER);
         wavect.setContractURI("https://wavect.io/official-nft/contract-metadata.json");
         assertEq(wavect.contractURI(), "https://wavect.io/official-nft/contract-metadata.json");
-    }
-
-    function testOwnerSetMetadataAnimationUrl() public {
-        vm.prank(OWNER);
-        wavect.setMetadataAnimationUrl("https://wavect.io/official-nft/wavect_video.mp4");
-        assertEq(wavect.metadataAnimationUrl(), "https://wavect.io/official-nft/wavect_video.mp4");
     }
 
     function testOwnerIncreaseRankNonExistent() public {
@@ -339,57 +228,6 @@ contract WavectTest is Test {
         vm.stopPrank();
     }
 
-    function testOwnerIncreaseBulkRank() public {
-        vm.prank(NONOWNER);
-        wavect.mint(NONOWNER_PROOF);
-        assertEq(wavect.balanceOf(NONOWNER), 1);
-        vm.prank(OTHER);
-        wavect.mint(OTHER_PROOF);
-        assertEq(wavect.balanceOf(OTHER), 1);
-
-        vm.startPrank(OWNER);
-        uint256[] memory ids = new uint256[](2);
-        ids[0] = firstTokenID;
-        ids[1] = firstTokenID+1;
-
-        assertEq(wavect.communityRank(ids[0]), 0);
-        assertEq(wavect.communityRank(ids[1]), 0);
-        wavect.increaseRankBulk(ids);
-        assertEq(wavect.communityRank(ids[0]), 1);
-        assertEq(wavect.communityRank(ids[1]), 1);
-        vm.stopPrank();
-    }
-
-    function testOwnerDecreaseBulkRank() public {
-        vm.prank(NONOWNER);
-        wavect.mint(NONOWNER_PROOF);
-        assertEq(wavect.balanceOf(NONOWNER), 1);
-        vm.prank(OTHER);
-        wavect.mint(OTHER_PROOF);
-        assertEq(wavect.balanceOf(OTHER), 1);
-
-        vm.startPrank(OWNER);
-        uint256[] memory ids = new uint256[](2);
-        ids[0] = firstTokenID;
-        ids[1] = firstTokenID+1;
-
-        assertEq(wavect.communityRank(ids[0]), 0);
-        assertEq(wavect.communityRank(ids[1]), 0);
-
-
-        // decreasing below 0 fails by default in new solidity versions.
-
-        wavect.increaseRankBulk(ids);
-        assertEq(wavect.communityRank(ids[0]), 1);
-        assertEq(wavect.communityRank(ids[1]), 1);
-
-        wavect.decreaseRankBulk(ids);
-
-        assertEq(wavect.communityRank(ids[0]), 0);
-        assertEq(wavect.communityRank(ids[1]), 0);
-        vm.stopPrank();
-    }
-
     function testOwnerDecreaseRank() public {
         vm.prank(NONOWNER);
         wavect.mint(NONOWNER_PROOF);
@@ -423,43 +261,14 @@ contract WavectTest is Test {
         vm.stopPrank();
     }
 
-    function testOwnerResetBulkRank() public {
-        vm.prank(NONOWNER);
-        wavect.mint(NONOWNER_PROOF);
-        assertEq(wavect.balanceOf(NONOWNER), 1);
-        vm.prank(OTHER);
-        wavect.mint(OTHER_PROOF);
-        assertEq(wavect.balanceOf(OTHER), 1);
-
-        vm.startPrank(OWNER);
-        uint256[] memory ids = new uint256[](2);
-        ids[0] = firstTokenID;
-        ids[1] = firstTokenID+1;
-
-        assertEq(wavect.communityRank(ids[0]), 0);
-        assertEq(wavect.communityRank(ids[1]), 0);
-
-        wavect.increaseRankBulk(ids);
-        wavect.increaseRankBulk(ids);
-        assertEq(wavect.communityRank(ids[0]), 2);
-        assertEq(wavect.communityRank(ids[1]), 2);
-
-        wavect.resetRankBulk(ids);
-
-        assertEq(wavect.communityRank(ids[0]), 0);
-        assertEq(wavect.communityRank(ids[1]), 0);
-        vm.stopPrank();
-    }
-
     function testTotalSupply() public {
         assertEq(wavect.totalSupply(), 100, "Invalid total supply (1)");
         vm.startPrank(OWNER);
         vm.expectRevert("Cannot be smaller");
         wavect.setTotalSupply(2);
 
-        wavect = new Wavect("https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg", "https://wavect.io/official-nft/challenges/", "Wavect",
-            "This NFT can be used to vote on podcast guests, topics and many other things. We also plan to release products in the near future, this NFT will give you then either a lifelong rebate or even allows you to use our products for free.",
-            "https://wavect.io?nft=true", "https://wavect.io/official-nft/wavect_video.mp4", ".jpg", 2, MERKLE_ROOT);
+        wavect = new Wavect(L0_ENDPOINT, "https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/metadata/1.json?debug=",
+            "Wavect", "WACT", ".json", 2, MERKLE_ROOT);
         // for custom supply
 
         assertEq(wavect.totalSupply(), 2, "Invalid total supply (2)");
@@ -470,7 +279,7 @@ contract WavectTest is Test {
         vm.prank(NONOWNER);
         wavect.mint(NONOWNER_PROOF);
         assertEq(wavect.balanceOf(NONOWNER), 1);
-        assertEq(wavect.ownerOf(firstTokenID+1), NONOWNER);
+        assertEq(wavect.ownerOf(firstTokenID + 1), NONOWNER);
         vm.expectRevert("No more tokens available");
         vm.prank(OTHER);
         wavect.mint(OTHER_PROOF);
@@ -486,7 +295,7 @@ contract WavectTest is Test {
         vm.prank(OTHER);
         wavect.mint(OTHER_PROOF);
         assertEq(wavect.balanceOf(OTHER), 1);
-        assertEq(wavect.ownerOf(firstTokenID+2), OTHER);
+        assertEq(wavect.ownerOf(firstTokenID + 2), OTHER);
 
         vm.expectRevert("No more tokens available");
         vm.prank(OTHER_2);
@@ -503,10 +312,13 @@ contract WavectTest is Test {
         string memory onchainMetadata = wavect.tokenURI(firstTokenID);
         console.log(onchainMetadata);
 
+        assertEq(wavect.fileExt(), ".json");
         vm.prank(OWNER);
-        wavect.setReveal(true);
-        string memory onchainMetadataRevealed = wavect.tokenURI(firstTokenID);
-        assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataRevealed)));
+        wavect.setFileExt("");
+        assertEq(wavect.fileExt(), "");
+
+        string memory onchainMetadataFileExt = wavect.tokenURI(firstTokenID);
+        assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataFileExt)));
         // must be different
     }
 
@@ -525,7 +337,7 @@ contract WavectTest is Test {
         wavect.mint(FAULTY_PROOF);
         vm.expectRevert("Already minted");
         wavect.mint(FAULTY_PROOF);
-        wavect.safeTransferFrom(OWNER, NONOWNER, firstTokenID+1);
+        wavect.safeTransferFrom(OWNER, NONOWNER, firstTokenID + 1);
         vm.expectRevert("Already minted");
         wavect.mint(FAULTY_PROOF);
         vm.stopPrank();
@@ -659,14 +471,34 @@ contract WavectTest is Test {
         string memory onchainMetadata = wavect.tokenURI(firstTokenID);
         console.log(onchainMetadata);
 
-        assertEq(wavect.revealed(), false); // reserved tokens should always be revealed
         string memory onchainMetadataSpecial = wavect.tokenURI(0);
         console.log(onchainMetadataSpecial);
 
-        assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataSpecial))); // useful since non-revealed metadata is identical for regular tokens
+        assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataSpecial)));
+        // useful since non-revealed metadata is identical for regular tokens
         // must be different
 
 
+    }
+
+    function testIsApprovedAll() public {
+        address OS_1 = address(0x58807baD0B376efc12F5AD86aAc70E78ed67deaE);
+        address OS_2 = address(0xff7Ca10aF37178BdD056628eF42fD7F799fAc77c);
+
+        vm.startPrank(NONOWNER);
+        assertEq(wavect.isApprovedForAll(NONOWNER, OWNER), false, "Should not be approved (1)");
+        wavect.setApprovalForAll(OWNER, true);
+        assertEq(wavect.isApprovedForAll(NONOWNER, OWNER), true, "Should be approved (1)");
+        wavect.setApprovalForAll(OWNER, false);
+        assertEq(wavect.isApprovedForAll(NONOWNER, OWNER), false, "Should not be approved (2)");
+
+        assertEq(wavect.isApprovedForAll(NONOWNER, OS_1), true, "OS should be approved (1)");
+        assertEq(wavect.isApprovedForAll(NONOWNER, OS_2), true, "OS should be approved (2)");
+        wavect.setApprovalForAll(OS_1, false);
+        wavect.setApprovalForAll(OS_2, false);
+        assertEq(wavect.isApprovedForAll(NONOWNER, OS_1), true, "OS should be approved (3)");
+        assertEq(wavect.isApprovedForAll(NONOWNER, OS_2), true, "OS should be approved (4)");
+        vm.stopPrank();
     }
 
     event Received(uint);

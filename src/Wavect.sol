@@ -6,22 +6,24 @@
 */
 pragma solidity ^0.8.7;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/PullPayment.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
-import "@openzeppelin/contracts/utils/Multicall.sol";
-import "base64-sol/base64.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./AddRecover.sol";
 import "./LinearlyAssigned.sol";
+import "@layer-zero/contracts/token/onft/IONFT721.sol";
+import "@layer-zero/contracts/token/onft/ONFT721Core.sol";
+import "@openzeppelin/contracts/utils/Multicall.sol";
+import "@openzeppelin/contracts/utils/Multicall.sol";
 import "./ContextMixin.sol";
 import "./NativeMetaTransaction.sol";
 
-contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPayment, Pausable, Multicall, ContextMixin, NativeMetaTransaction {
+contract Wavect is ERC721, LinearlyAssigned, AddRecover, PullPayment, Pausable, ONFT721Core, IONFT721, Multicall,
+ContextMixin, NativeMetaTransaction, ReentrancyGuard {
 
     /// @dev The first 3 tokenIDs are reserved for another use-case (giving incentives to do something good)
     uint256 public constant RESERVED_TOKENS = 3;
@@ -34,15 +36,8 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
 
     string private _contractURI;
     string public baseURI;
-    /// @dev BaseURI for reserved tokens
-    string public reservedBaseURI;
-    string public metadataDescr;
-    string public metadataName;
-    string public metadataExtLink;
-    string public metadataAnimationUrl;
-    string public imgFileExt;
+    string public fileExt;
 
-    bool public revealed;
     bool public publicSaleEnabled;
 
     bytes32 public merkleRoot;
@@ -56,44 +51,38 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
     event RankDecreased(uint256 indexed tokenId, uint256 newRank);
     event RankReset(uint256 indexed tokenId);
 
-    constructor(string memory contractURI_, string memory baseURI_, string memory reservedBaseURI_, string memory metadataName_, string memory metadataDescr_,
-        string memory metadataExtLink_, string memory metadataAnimationUrl_, string memory imgFileExt_, uint256 totalSupply_,
-        bytes32 merkleRoot_)
-    ERC721("Wavect", "WACT")
+    constructor(address _lzEndpoint, string memory contractURI_, string memory baseURI_, string memory name_,
+        string memory ticker_, string memory fileExt_, uint256 totalSupply_, bytes32 merkleRoot_)
+    ONFT721Core(_lzEndpoint)
+    ERC721(name_, ticker_)
     LinearlyAssigned(totalSupply_, RESERVED_TOKENS)
     {
-        _initializeEIP712("Wavect");
-
         maxWallet = 1;
         _contractURI = contractURI_;
         baseURI = baseURI_;
-        reservedBaseURI = reservedBaseURI_;
-        metadataDescr = metadataDescr_;
-        metadataName = metadataName_;
-        metadataExtLink = metadataExtLink_;
-        metadataAnimationUrl = metadataAnimationUrl_;
-        imgFileExt = imgFileExt_;
+        fileExt = fileExt_;
         merkleRoot = merkleRoot_;
     }
 
     /**
-   * Override isApprovedForAll to auto-approve OS's proxy contract
-   */
+       * Override isApprovedForAll to auto-approve OS's proxy contract
+       */
     function isApprovedForAll(
         address _owner,
         address _operator
-    ) public override view returns (bool isOperator) {
+    ) public override(IERC721, ERC721) view returns (bool isOperator) {
         // if OpenSea's ERC721 Proxy Address is detected, auto-return true
         // for Polygon's Mumbai testnet, use 0xff7Ca10aF37178BdD056628eF42fD7F799fAc77c
         // Polygon mainnet 0x58807baD0B376efc12F5AD86aAc70E78ed67deaE
         if (_operator == address(0x58807baD0B376efc12F5AD86aAc70E78ed67deaE)
-         || _operator == address(0xff7Ca10aF37178BdD056628eF42fD7F799fAc77c)) {
+            || _operator == address(0xff7Ca10aF37178BdD056628eF42fD7F799fAc77c)) {
             return true;
         }
 
         // otherwise, use the default ERC721.isApprovedForAll()
         return ERC721.isApprovedForAll(_owner, _operator);
     }
+
     /**
      * This is used instead of msg.sender as transactions won't be sent by the original token owner, but by OpenSea.
      */
@@ -101,7 +90,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
         return ContextMixin.msgSender();
     }
 
-    function claimRewardNFT(uint256 tokenID_, uint256 nonce_, bytes memory signature_) external nonReentrant whenNotPaused {
+    function claimRewardNFT(uint256 tokenID_, uint256 nonce_, bytes memory signature_) external whenNotPaused nonReentrant {
         require(tokenID_ < RESERVED_TOKENS, "Not reward token");
         require(!usedRewardClaimNonces[nonce_], "Nonce used");
         usedRewardClaimNonces[nonce_] = true;
@@ -114,7 +103,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
         _mint(_msgSender(), tokenID_);
     }
 
-    function mint(bytes32[] calldata merkleProof_) payable external nonReentrant whenNotPaused {
+    function mint(bytes32[] calldata merkleProof_) payable external whenNotPaused nonReentrant {
         require(minted[_msgSender()] < maxWallet, "Already minted");
         require(msg.value >= mintPrice, "Payment too low");
 
@@ -131,47 +120,22 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
         }
     }
 
-    function withdrawRevenue(address to_) external onlyOwner nonReentrant {
+    function withdrawRevenue(address to_) external onlyOwner {
         require(address(this).balance > 0, "No balance");
         payable(to_).transfer(address(this).balance);
     }
 
-    function getImage(uint256 tokenId) private view returns (string memory) {
-        if (tokenId < RESERVED_TOKENS) {
-            return string(abi.encodePacked(reservedBaseURI, Strings.toString(tokenId), imgFileExt));
-        } else if (revealed) {
-            return string(abi.encodePacked(_baseURI(), Strings.toString(tokenId), imgFileExt, '?rank=', communityRank[tokenId]));
-        }
-        return string(abi.encodePacked(_baseURI()));
-    }
-
-    function getMetadata(uint256 tokenId) private view returns (string memory) {
-        require(_exists(tokenId), "ERC721: URI get of nonexistent token");
-
-        string memory attributes = string(abi.encodePacked(
-                '[{"trait_type": "Type", "value": "Super Fan"},{"display_type":"boost_number","trait_type":"Community Rank","value":',
-                Strings.toString(communityRank[tokenId]), '}]'));
-        string memory json = Base64.encode(bytes(string(
-                abi.encodePacked('{"name": "', metadataName, '", "description": "', metadataDescr, '", "attributes":',
-                attributes, ', "image": "', getImage(tokenId), '","external_link":"', metadataExtLink,
-                '", "youtube_url": "https://www.youtube.com/watch?v=OuIqlNXL3OE", "animation_url": "', metadataAnimationUrl, '"}')
-            )));
-
-        return json;
-    }
-
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
-        string memory json = getMetadata(tokenId);
-        // non-existent token check integrated
-        return string(abi.encodePacked('data:application/json;base64,', json));
+        _requireMinted(tokenId);
+        return string(abi.encodePacked(baseURI, Strings.toString(tokenId), fileExt));
     }
 
     function contractURI() external view returns (string memory) {
         return _contractURI;
     }
 
-    function _baseURI() internal view override returns (string memory) {
-        return baseURI;
+    function setFileExt(string memory fileExt_) external onlyOwner {
+        fileExt = fileExt_;
     }
 
     function increaseRank(uint256 tokenID_) public onlyOwner {
@@ -180,22 +144,10 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
         emit RankIncreased(tokenID_, communityRank[tokenID_]);
     }
 
-    function increaseRankBulk(uint256[] calldata tokenIDs_) external onlyOwner {
-        for (uint256 i = 0; i < tokenIDs_.length; i++) {
-            increaseRank(tokenIDs_[i]);
-        }
-    }
-
     function decreaseRank(uint256 tokenID_) public onlyOwner {
         require(_exists(tokenID_), "Non existent");
         communityRank[tokenID_] -= 1;
         emit RankDecreased(tokenID_, communityRank[tokenID_]);
-    }
-
-    function decreaseRankBulk(uint256[] calldata tokenIDs_) external onlyOwner {
-        for (uint256 i = 0; i < tokenIDs_.length; i++) {
-            decreaseRank(tokenIDs_[i]);
-        }
     }
 
     function resetRank(uint256 tokenID_) public onlyOwner {
@@ -204,22 +156,16 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
         emit RankReset(tokenID_);
     }
 
-    function resetRankBulk(uint256[] calldata tokenIDs_) external onlyOwner {
-        for (uint256 i = 0; i < tokenIDs_.length; i++) {
-            resetRank(tokenIDs_[i]);
-        }
-    }
-
     function setContractURI(string calldata contractURI_) external onlyOwner() {
         _contractURI = contractURI_;
     }
 
-    function setMintPrice(uint256 mintPrice_) external onlyOwner {
-        mintPrice = mintPrice_;
+    function setBaseURI(string calldata baseURI_) external onlyOwner() {
+        baseURI = baseURI_;
     }
 
-    function setImgFileExt(string memory imgFileExt_) external onlyOwner {
-        imgFileExt = imgFileExt_;
+    function setMintPrice(uint256 mintPrice_) external onlyOwner {
+        mintPrice = mintPrice_;
     }
 
     function setPublicSale(bool publicSale_) external onlyOwner {
@@ -242,38 +188,17 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, ReentrancyGuard, PullPa
         maxWallet = maxWallet_;
     }
 
-    function setReveal(bool reveal_) external onlyOwner {
-        revealed = reveal_;
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ONFT721Core, ERC721, IERC165) returns (bool) {
+        return interfaceId == type(IONFT721).interfaceId || super.supportsInterface(interfaceId);
     }
 
-    /// @dev Convenience method, to avoid two separate transactions
-    function switchRevealState(bool reveal_, string memory baseURI_) external onlyOwner {
-        revealed = reveal_;
-        baseURI = baseURI_;
+    function _debitFrom(address _from, uint16, bytes memory, uint _tokenId) internal virtual override {
+        require(_isApprovedOrOwner(_msgSender(), _tokenId), "ONFT721: send caller is not owner nor approved");
+        require(ERC721.ownerOf(_tokenId) == _from, "ONFT721: send from incorrect owner");
+        _burn(_tokenId);
     }
 
-    /// @dev BaseURI is used for the image itself in this case, since the metadata itself lives on-chain
-    function setBaseURI(string memory baseURI_) external onlyOwner {
-        baseURI = baseURI_;
-    }
-
-    function setReservedBaseURI(string memory reservedBaseURI_) external onlyOwner {
-        reservedBaseURI = reservedBaseURI_;
-    }
-
-    function setMetadataName(string memory metadataName_) external onlyOwner {
-        metadataName = metadataName_;
-    }
-
-    function setMetadataDescr(string memory metadataDescr_) external onlyOwner {
-        metadataDescr = metadataDescr_;
-    }
-
-    function setMetadataExtLink(string memory metadataExtLink_) external onlyOwner {
-        metadataExtLink = metadataExtLink_;
-    }
-
-    function setMetadataAnimationUrl(string memory metadataAnimationUrl_) external onlyOwner {
-        metadataAnimationUrl = metadataAnimationUrl_;
+    function _creditTo(uint16, address _toAddress, uint _tokenId) internal virtual override {
+        _safeMint(_toAddress, _tokenId);
     }
 }
