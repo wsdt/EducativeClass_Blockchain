@@ -17,7 +17,7 @@ contract WavectScript is Script {
         vm.startBroadcast();
 
         Wavect wavect = new Wavect(L0_ENDPOINT, "https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg?debug=",
-            "Wavect", "WACT", ".json", 100, MERKLE_ROOT);
+            "Wavect", "WACT", ".json", 100, MERKLE_ROOT, true);
 
         vm.stopBroadcast();
     }

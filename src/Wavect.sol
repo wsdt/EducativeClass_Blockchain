@@ -40,6 +40,9 @@ ContextMixin, NativeMetaTransaction, ReentrancyGuard {
 
     bool public publicSaleEnabled;
 
+    /// @dev Needed to ensure that the regular NFT only exists on one chain.
+    bool public mintEnabled;
+
     bytes32 public merkleRoot;
 
     /// @dev Used to specifically reward active community members, etc.
@@ -52,7 +55,7 @@ ContextMixin, NativeMetaTransaction, ReentrancyGuard {
     event RankReset(uint256 indexed tokenId);
 
     constructor(address _lzEndpoint, string memory contractURI_, string memory baseURI_, string memory name_,
-        string memory ticker_, string memory fileExt_, uint256 totalSupply_, bytes32 merkleRoot_)
+        string memory ticker_, string memory fileExt_, uint256 totalSupply_, bytes32 merkleRoot_, bool mintEnabled_)
     ONFT721Core(_lzEndpoint)
     ERC721(name_, ticker_)
     LinearlyAssigned(totalSupply_, RESERVED_TOKENS)
@@ -62,6 +65,7 @@ ContextMixin, NativeMetaTransaction, ReentrancyGuard {
         baseURI = baseURI_;
         fileExt = fileExt_;
         merkleRoot = merkleRoot_;
+        mintEnabled = mintEnabled_;
     }
 
     /**
@@ -104,6 +108,7 @@ ContextMixin, NativeMetaTransaction, ReentrancyGuard {
     }
 
     function mint(bytes32[] calldata merkleProof_) payable external whenNotPaused nonReentrant {
+        require(mintEnabled, "Mint disabled"); // cross chain protection
         require(minted[_msgSender()] < maxWallet, "Already minted");
         require(msg.value >= mintPrice, "Payment too low");
 
@@ -118,11 +123,7 @@ ContextMixin, NativeMetaTransaction, ReentrancyGuard {
             // if paid too much, allow to get funds back
             _asyncTransfer(_msgSender(), msg.value - mintPrice);
         }
-    }
-
-    function withdrawRevenue(address to_) external onlyOwner {
-        require(address(this).balance > 0, "No balance");
-        payable(to_).transfer(address(this).balance);
+        _asyncTransfer(owner(), payments(owner()) + mintPrice); // for claiming revenue
     }
 
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
@@ -170,6 +171,10 @@ ContextMixin, NativeMetaTransaction, ReentrancyGuard {
 
     function setPublicSale(bool publicSale_) external onlyOwner {
         publicSaleEnabled = publicSale_;
+    }
+
+    function setMintEnabled(bool mintEnabled_) external onlyOwner {
+        mintEnabled = mintEnabled_;
     }
 
     function setMerkleRoot(bytes32 merkleRoot_) external onlyOwner {

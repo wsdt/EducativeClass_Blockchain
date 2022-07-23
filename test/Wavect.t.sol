@@ -48,7 +48,7 @@ contract WavectTest is Test {
 
         vm.prank(OWNER);
         wavect = new Wavect(L0_ENDPOINT, "https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/metadata/1.json?debug=",
-            "Wavect", "WACT", ".json", 100, MERKLE_ROOT);
+            "Wavect", "WACT", ".json", 100, MERKLE_ROOT, true);
 
         firstTokenID = wavect.RESERVED_TOKENS();
 
@@ -71,6 +71,12 @@ contract WavectTest is Test {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
         wavect.setMintPrice(1);
+    }
+
+    function testNonOwnerSetMintEnabled() public {
+        vm.expectRevert("Ownable: caller is not the owner");
+        vm.prank(NONOWNER);
+        wavect.setMintEnabled(false);
     }
 
     function testNonOwnerSetFileExt() public {
@@ -137,6 +143,13 @@ contract WavectTest is Test {
         vm.prank(OWNER);
         wavect.setMintPrice(1);
         assertEq(wavect.mintPrice(), 1);
+    }
+
+    function testOwnerSetMintEnabled() public {
+        assertEq(wavect.mintEnabled(), true);
+        vm.prank(OWNER);
+        wavect.setMintEnabled(false);
+        assertEq(wavect.mintEnabled(), false);
     }
 
     function testOwnerSetPublicSale() public {
@@ -261,6 +274,22 @@ contract WavectTest is Test {
         vm.stopPrank();
     }
 
+    function testMintEnabled() public {
+        assertEq(wavect.mintEnabled(), true);
+
+        vm.prank(NONOWNER);
+        wavect.mint(NONOWNER_PROOF);
+        vm.prank(OWNER);
+        wavect.setMintEnabled(false);
+
+        vm.expectRevert("Mint disabled");
+        vm.prank(OTHER);
+        wavect.mint(OTHER_PROOF);
+
+        vm.prank(OTHER_2);
+        wavect.claimRewardNFT(0, 0, OWNER_SIG_EXAMPLE);
+    }
+
     function testTotalSupply() public {
         assertEq(wavect.totalSupply(), 100, "Invalid total supply (1)");
         vm.startPrank(OWNER);
@@ -268,7 +297,7 @@ contract WavectTest is Test {
         wavect.setTotalSupply(2);
 
         wavect = new Wavect(L0_ENDPOINT, "https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/metadata/1.json?debug=",
-            "Wavect", "WACT", ".json", 2, MERKLE_ROOT);
+            "Wavect", "WACT", ".json", 2, MERKLE_ROOT, true);
         // for custom supply
 
         assertEq(wavect.totalSupply(), 2, "Invalid total supply (2)");
@@ -350,28 +379,33 @@ contract WavectTest is Test {
         // for free
         assertEq(wavect.balanceOf(OTHER_2), 1);
 
-        vm.startPrank(OWNER);
+        vm.prank(OWNER);
         wavect.setMintPrice(0.1 ether);
         assertEq(wavect.balanceOf(OWNER), 0);
         vm.expectRevert("Payment too low");
+        vm.prank(NONOWNER);
         wavect.mint(OWNER_PROOF);
 
-        vm.deal(OWNER, 0.1 ether);
-        wavect.mint{value : 0.1 ether}(OWNER_PROOF);
-        assertEq(wavect.balanceOf(OWNER), 1);
+        vm.deal(NONOWNER, 0.15 ether);
+        vm.prank(NONOWNER);
+        wavect.mint{value : 0.15 ether}(NONOWNER_PROOF);
+        assertEq(wavect.balanceOf(NONOWNER), 1);
 
-        assertEq(address(wavect).balance, 0.1 ether);
-        wavect.withdrawRevenue(OTHER);
-        assertEq(address(OTHER).balance, 0.1 ether);
-        assertEq(address(wavect).balance, 0 ether);
+        assertEq(address(wavect).balance, 0 ether, "Should not have balance (1-0)"); // because it is on Escrow
+        wavect.withdrawPayments(payable(OWNER));
+        wavect.withdrawPayments(payable(NONOWNER));
+        assertEq(address(OWNER).balance, 0.1 ether, "Should receive payment (1-0)");
+        assertEq(address(NONOWNER).balance, 0.05 ether, "Should receive payment (1-1)");
+        assertEq(address(wavect).balance, 0 ether, "Should not have balance (1-1)");
 
-        vm.expectRevert("No balance");
-        wavect.withdrawRevenue(OTHER);
-        vm.stopPrank();
-
-        vm.expectRevert("Ownable: caller is not the owner");
+        vm.deal(OTHER, 0.1 ether);
         vm.prank(OTHER);
-        wavect.withdrawRevenue(OWNER);
+        wavect.mint{value : 0.1 ether}(OTHER_PROOF);
+
+        vm.prank(OTHER);
+        wavect.withdrawPayments(payable(OTHER));
+        assertEq(address(wavect).balance, 0 ether, "Should not have balance (2)"); // on escrow
+        assertEq(address(OTHER).balance, 0 ether, "Should not get payment (2)");
     }
 
     function testPullPayment() public {
@@ -388,20 +422,6 @@ contract WavectTest is Test {
         vm.prank(OTHER_2);
         wavect.withdrawPayments(payable(OTHER_2));
         assertEq(address(OTHER_2).balance, 0 ether);
-
-        vm.prank(NONOWNER);
-        wavect.withdrawPayments(payable(NONOWNER));
-        assertEq(address(NONOWNER).balance, 0.9 ether);
-        assertEq(address(wavect).balance, 0.1 ether);
-
-        vm.prank(OWNER);
-        wavect.withdrawRevenue(OTHER);
-        assertEq(address(OTHER).balance, 0.1 ether);
-        assertEq(address(wavect).balance, 0 ether);
-
-        vm.expectRevert("Ownable: caller is not the owner");
-        vm.prank(NONOWNER);
-        wavect.withdrawRevenue(OWNER);
     }
 
     function testPausable() public {
@@ -477,8 +497,6 @@ contract WavectTest is Test {
         assert(keccak256(abi.encodePacked(onchainMetadata)) != keccak256(abi.encodePacked(onchainMetadataSpecial)));
         // useful since non-revealed metadata is identical for regular tokens
         // must be different
-
-
     }
 
     function testIsApprovedAll() public {
