@@ -16,8 +16,8 @@ contract WavectScript is Script {
     function run() public {
         vm.startBroadcast();
 
-        Wavect wavect = new Wavect(L0_ENDPOINT, "https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/logo_square.jpg?debug=",
-            "Wavect", "WACT", ".json", 100, MERKLE_ROOT, true);
+        Wavect wavectA = new Wavect(address(0x79a63d6d8BBD5c6dfc774dA79bCcD948EAcb53FA), "https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/metadata/1.json?debug=",
+            "Wavect", "WACT", ".json", 100, MERKLE_ROOT, false);
 
         vm.stopBroadcast();
     }
