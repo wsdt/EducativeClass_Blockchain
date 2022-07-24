@@ -147,7 +147,7 @@ contract WavectTest is Test {
     function testNonOwnerSetMintEnabled() public {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
-        wavectA.setMintEnabled(false);
+        wavectA.setDisableMint(false);
     }
 
     function testNonOwnerSetFileExt() public {
@@ -216,11 +216,11 @@ contract WavectTest is Test {
         assertEq(wavectA.mintPrice(), 1);
     }
 
-    function testOwnerSetMintEnabled() public {
-        assertEq(wavectA.mintEnabled(), true);
+    function testOwnerSetDisableMint() public {
+        assertEq(wavectA.paused(), false);
         vm.prank(OWNER);
-        wavectA.setMintEnabled(false);
-        assertEq(wavectA.mintEnabled(), false);
+        wavectA.setDisableMint(true);
+        assertEq(wavectA.paused(), true);
     }
 
     function testOwnerSetPublicSale() public {
@@ -346,17 +346,18 @@ contract WavectTest is Test {
     }
 
     function testMintEnabled() public {
-        assertEq(wavectA.mintEnabled(), true);
+        assertEq(wavectA.paused(), false);
 
         vm.prank(NONOWNER);
         wavectA.mint(NONOWNER_PROOF);
         vm.prank(OWNER);
-        wavectA.setMintEnabled(false);
+        wavectA.setDisableMint(true);
 
-        vm.expectRevert("Mint disabled");
+        vm.expectRevert("Pausable: paused");
         vm.prank(OTHER);
         wavectA.mint(OTHER_PROOF);
 
+        vm.expectRevert("Pausable: paused");
         vm.prank(OTHER_2);
         wavectA.claimRewardNFT(0, 0, OWNER_SIG_EXAMPLE);
     }
@@ -506,7 +507,7 @@ contract WavectTest is Test {
         vm.stopPrank();
 
         vm.prank(OWNER);
-        wavectA.setPaused(true);
+        wavectA.setDisableMint(true);
         assertEq(wavectA.balanceOf(OWNER), 0);
         vm.expectRevert("Pausable: paused");
         wavectA.mint(OWNER_PROOF);

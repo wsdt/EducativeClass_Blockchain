@@ -37,9 +37,6 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, PullPayment, Pausable, 
 
     bool public publicSaleEnabled;
 
-    /// @dev Needed to ensure that the regular NFT only exists on one chain.
-    bool public mintEnabled;
-
     bytes32 public merkleRoot;
 
     /// @dev Used to specifically reward active community members, etc.
@@ -62,7 +59,12 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, PullPayment, Pausable, 
         baseURI = baseURI_;
         fileExt = fileExt_;
         merkleRoot = merkleRoot_;
-        mintEnabled = mintEnabled_;
+
+        /* Important to ensure that NFT only exists on one chain (for regular NFTs)
+        * and for the reward nfts to ensure that nonces/signatures cannot be reused. */
+        if (!mintEnabled_) {
+            _pause();
+        }
     }
 
     function claimRewardNFT(uint256 tokenID_, uint256 nonce_, bytes memory signature_) external whenNotPaused nonReentrant {
@@ -79,7 +81,6 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, PullPayment, Pausable, 
     }
 
     function mint(bytes32[] calldata merkleProof_) payable external whenNotPaused nonReentrant {
-        require(mintEnabled, "Mint disabled"); // cross chain protection
         require(minted[_msgSender()] < maxWallet, "Already minted");
         require(msg.value >= mintPrice, "Payment too low");
 
@@ -144,15 +145,13 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, PullPayment, Pausable, 
         publicSaleEnabled = publicSale_;
     }
 
-    function setMintEnabled(bool mintEnabled_) external onlyOwner {
-        mintEnabled = mintEnabled_;
-    }
-
     function setMerkleRoot(bytes32 merkleRoot_) external onlyOwner {
         merkleRoot = merkleRoot_;
     }
 
-    function setPaused(bool pause_) external onlyOwner {
+    /* @dev Important to ensure that NFT only exists on one chain (for regular NFTs)
+        * and for the reward nfts to ensure that nonces/signatures cannot be reused. */
+    function setDisableMint(bool pause_) external onlyOwner {
         if (pause_) {
             _pause();
         } else {
