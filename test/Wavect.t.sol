@@ -573,22 +573,12 @@ contract WavectTest is Test {
     }
 
     function testIsApprovedAll() public {
-        address OS_1 = address(0x58807baD0B376efc12F5AD86aAc70E78ed67deaE);
-        address OS_2 = address(0xff7Ca10aF37178BdD056628eF42fD7F799fAc77c);
-
         vm.startPrank(NONOWNER);
         assertEq(wavectA.isApprovedForAll(NONOWNER, OWNER), false, "Should not be approved (1)");
         wavectA.setApprovalForAll(OWNER, true);
         assertEq(wavectA.isApprovedForAll(NONOWNER, OWNER), true, "Should be approved (1)");
         wavectA.setApprovalForAll(OWNER, false);
         assertEq(wavectA.isApprovedForAll(NONOWNER, OWNER), false, "Should not be approved (2)");
-
-        assertEq(wavectA.isApprovedForAll(NONOWNER, OS_1), true, "OS should be approved (1)");
-        assertEq(wavectA.isApprovedForAll(NONOWNER, OS_2), true, "OS should be approved (2)");
-        wavectA.setApprovalForAll(OS_1, false);
-        wavectA.setApprovalForAll(OS_2, false);
-        assertEq(wavectA.isApprovedForAll(NONOWNER, OS_1), true, "OS should be approved (3)");
-        assertEq(wavectA.isApprovedForAll(NONOWNER, OS_2), true, "OS should be approved (4)");
         vm.stopPrank();
     }
 

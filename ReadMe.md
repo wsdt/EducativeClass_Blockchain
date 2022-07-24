@@ -6,3 +6,7 @@ ChainIDs are not the EVM chainIds since also non EVM chains are supported by the
 
 Mainnet: https://layerzero.gitbook.io/docs/technical-reference/mainnet/supported-chain-ids
 Testnet: https://layerzero.gitbook.io/docs/technical-reference/testnet/testnet-addresses
+
+
+## AdapterParams
+Use `0x` not `0x00` or `0x0`

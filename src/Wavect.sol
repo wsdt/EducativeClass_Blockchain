@@ -19,11 +19,8 @@ import "@layer-zero/contracts/token/onft/IONFT721.sol";
 import "@layer-zero/contracts/token/onft/ONFT721Core.sol";
 import "@openzeppelin/contracts/utils/Multicall.sol";
 import "@openzeppelin/contracts/utils/Multicall.sol";
-import "./ContextMixin.sol";
-import "./NativeMetaTransaction.sol";
 
-contract Wavect is ERC721, LinearlyAssigned, AddRecover, PullPayment, Pausable, ONFT721Core, IONFT721, Multicall,
-ContextMixin, NativeMetaTransaction, ReentrancyGuard {
+contract Wavect is ERC721, LinearlyAssigned, AddRecover, PullPayment, Pausable, ONFT721Core, IONFT721, Multicall, ReentrancyGuard {
 
     /// @dev The first 3 tokenIDs are reserved for another use-case (giving incentives to do something good)
     uint256 public constant RESERVED_TOKENS = 3;
@@ -66,32 +63,6 @@ ContextMixin, NativeMetaTransaction, ReentrancyGuard {
         fileExt = fileExt_;
         merkleRoot = merkleRoot_;
         mintEnabled = mintEnabled_;
-    }
-
-    /**
-       * Override isApprovedForAll to auto-approve OS's proxy contract
-       */
-    function isApprovedForAll(
-        address _owner,
-        address _operator
-    ) public override(IERC721, ERC721) view returns (bool isOperator) {
-        // if OpenSea's ERC721 Proxy Address is detected, auto-return true
-        // for Polygon's Mumbai testnet, use 0xff7Ca10aF37178BdD056628eF42fD7F799fAc77c
-        // Polygon mainnet 0x58807baD0B376efc12F5AD86aAc70E78ed67deaE
-        if (_operator == address(0x58807baD0B376efc12F5AD86aAc70E78ed67deaE)
-            || _operator == address(0xff7Ca10aF37178BdD056628eF42fD7F799fAc77c)) {
-            return true;
-        }
-
-        // otherwise, use the default ERC721.isApprovedForAll()
-        return ERC721.isApprovedForAll(_owner, _operator);
-    }
-
-    /**
-     * This is used instead of msg.sender as transactions won't be sent by the original token owner, but by OpenSea.
-     */
-    function _msgSender() internal override view returns (address sender) {
-        return ContextMixin.msgSender();
     }
 
     function claimRewardNFT(uint256 tokenID_, uint256 nonce_, bytes memory signature_) external whenNotPaused nonReentrant {
