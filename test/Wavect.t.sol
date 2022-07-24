@@ -57,9 +57,9 @@ contract WavectTest is Test {
         L0EndpointChainB = new LZEndpointMock(LOCAL_CHAIN_ID);
 
         wavectA = new Wavect(address(L0EndpointChainA), "https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/metadata/1.json?debug=",
-            "Wavect", "WACT", ".json", 100, MERKLE_ROOT, true);
-        wavectB = new Wavect(address(L0EndpointChainB), "https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/metadata/1.json?debug=",
             "Wavect", "WACT", ".json", 100, MERKLE_ROOT, false);
+        wavectB = new Wavect(address(L0EndpointChainB), "https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/metadata/1.json?debug=",
+            "Wavect", "WACT", ".json", 100, MERKLE_ROOT, true);
 
         L0EndpointChainA.setDestLzEndpoint(address(wavectB), address(L0EndpointChainB));
         L0EndpointChainB.setDestLzEndpoint(address(wavectA), address(L0EndpointChainA));
@@ -391,7 +391,7 @@ contract WavectTest is Test {
         wavectA.setTotalSupply(2);
 
         wavectA = new Wavect(L0_ENDPOINT_DUMMY, "https://wavect.io/official-nft/contract-metadata.json", "https://wavect.io/official-nft/metadata/1.json?debug=",
-            "Wavect", "WACT", ".json", 2, MERKLE_ROOT, true);
+            "Wavect", "WACT", ".json", 2, MERKLE_ROOT, false);
         // for custom supply
 
         assertEq(wavectA.totalSupply(), 2, "Invalid total supply (2)");

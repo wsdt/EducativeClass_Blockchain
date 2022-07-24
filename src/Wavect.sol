@@ -48,7 +48,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, PullPayment, Pausable, 
     event RankReset(uint256 indexed tokenId);
 
     constructor(address _lzEndpoint, string memory contractURI_, string memory baseURI_, string memory name_,
-        string memory ticker_, string memory fileExt_, uint256 totalSupply_, bytes32 merkleRoot_, bool mintEnabled_)
+        string memory ticker_, string memory fileExt_, uint256 totalSupply_, bytes32 merkleRoot_, bool disableMint_)
     ONFT721Core(_lzEndpoint)
     ERC721(name_, ticker_)
     LinearlyAssigned(totalSupply_, RESERVED_TOKENS)
@@ -61,7 +61,7 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, PullPayment, Pausable, 
 
         /* Important to ensure that NFT only exists on one chain (for regular NFTs)
         * and for the reward nfts to ensure that nonces/signatures cannot be reused. */
-        if (!mintEnabled_) {
+        if (disableMint_) {
             _pause();
         }
     }
