@@ -106,24 +106,37 @@ contract WavectTest is Test {
             ""
         );
 
-        assertEq(wavectA.balanceOf(OTHER), 0, "Could not burn");
-        assertEq(wavectB.balanceOf(OTHER), 1, "Could not bridge"); // fails silently (ref Discord ticket L0)
-        vm.stopPrank();
-        /*
-        // can send to other onft contract eg. not the original nft contract chain
-        await ONFT_B.connect(warlock).sendFrom(
-            warlock.address,
-            chainId_A,
-            warlock.address,
-            tokenId,
-            warlock.address,
-            ethers.constants.AddressZero,
-            "0x"
-        )
+        assertEq(wavectA.balanceOf(OTHER), 0, "Could not burn (1)");
+        assertEq(wavectB.balanceOf(OTHER), 1, "Could not bridge (1)");
 
-        // token is burned on the sending chain
-        await expect(ONFT_B.ownerOf(tokenId)).to.be.revertedWith("ERC721: operator query for nonexistent token")
-        */
+        vm.expectRevert("ERC721: invalid token ID");
+        wavectA.tokenURI(expectedTokenID);
+        wavectB.tokenURI(expectedTokenID); // should not fail anymore
+
+        assertEq(wavectB.communityRank(expectedTokenID), 0, "Wrong rank (1)");
+        vm.stopPrank();
+        vm.prank(OWNER);
+        wavectB.increaseRank(expectedTokenID);
+        assertEq(wavectB.communityRank(expectedTokenID), 1, "Wrong rank (2)");
+
+        vm.startPrank(OTHER);
+        wavectB.approve(address(wavectB), expectedTokenID);
+
+        wavectB.sendFrom(
+            OTHER,
+            LOCAL_CHAIN_ID,
+            abi.encodePacked(OTHER),
+            expectedTokenID,
+            payable(OTHER),
+            address(0),
+            ""
+        );
+
+        assertEq(wavectB.balanceOf(OTHER), 0, "Could not burn (2)");
+        assertEq(wavectA.balanceOf(OTHER), 1, "Could not bridge (2)");
+        assertEq(wavectA.communityRank(expectedTokenID), 1, "Wrong rank (3)");
+        assertEq(wavectB.communityRank(expectedTokenID), 0, "Wrong rank (4)");
+        vm.stopPrank();
     }
 
     function testNonOwnerSetContractURI() public {
@@ -172,6 +185,15 @@ contract WavectTest is Test {
         vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(NONOWNER);
         wavectA.setMerkleRoot("");
+    }
+
+    function testMulticall() public {
+        vm.startPrank(OWNER);
+        bytes[] memory payload = new bytes[](2);
+        payload[0] = abi.encodeWithSelector(wavectA.mint.selector, OWNER_PROOF);
+        payload[1] = abi.encodeWithSelector(wavectA.increaseRank.selector, 3);
+        wavectA.multicall(payload);
+        vm.stopPrank();
     }
 
     function testNonOwnerIncreaseRank() public {

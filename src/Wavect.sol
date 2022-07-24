@@ -15,9 +15,8 @@ import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./AddRecover.sol";
 import "./LinearlyAssigned.sol";
-import "@layer-zero/contracts/token/onft/IONFT721.sol";
-import "@layer-zero/contracts/token/onft/ONFT721Core.sol";
-import "@openzeppelin/contracts/utils/Multicall.sol";
+import "./l0/ONFT721Core.sol";
+import "./l0/IONFT721.sol";
 import "@openzeppelin/contracts/utils/Multicall.sol";
 
 contract Wavect is ERC721, LinearlyAssigned, AddRecover, PullPayment, Pausable, ONFT721Core, IONFT721, Multicall, ReentrancyGuard {
@@ -167,13 +166,17 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, PullPayment, Pausable, 
         return interfaceId == type(IONFT721).interfaceId || super.supportsInterface(interfaceId);
     }
 
-    function _debitFrom(address _from, uint16, bytes memory, uint _tokenId) internal virtual override {
+    function _debitFrom(address _from, uint16, bytes memory, uint _tokenId) internal virtual override returns (uint256) {
         require(_isApprovedOrOwner(_msgSender(), _tokenId), "ONFT721: send caller is not owner nor approved");
         require(ERC721.ownerOf(_tokenId) == _from, "ONFT721: send from incorrect owner");
         _burn(_tokenId);
+        uint256 rank = communityRank[_tokenId];
+        communityRank[_tokenId] = 0;
+        return rank;
     }
 
-    function _creditTo(uint16, address _toAddress, uint _tokenId) internal virtual override {
-        _safeMint(_toAddress, _tokenId);
+    function _creditTo(uint16, address toAddress_, uint256 tokenId_, uint256 rank_) internal virtual override {
+        _safeMint(toAddress_, tokenId_);
+        communityRank[tokenId_] = rank_;
     }
 }
