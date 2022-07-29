@@ -119,6 +119,13 @@ contract WavectTest is Test {
         wavectB.increaseRank(expectedTokenID);
         assertEq(wavectB.communityRank(expectedTokenID), 1, "Wrong rank (2)");
 
+        // test if newly minted tokenIDs are right
+        vm.prank(OTHER_2);
+        wavectA.mint(OTHER_PROOF_2);
+        assertEq(wavectA.balanceOf(OTHER_2), 1, "Could not mint (2)");
+        wavectA.tokenURI(expectedTokenID+1);
+
+
         vm.startPrank(OTHER);
         wavectB.approve(address(wavectB), expectedTokenID);
 
