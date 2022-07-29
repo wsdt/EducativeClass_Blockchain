@@ -14,3 +14,7 @@ Use `0x` not `0x00` or `0x0`
 
 ## Retry messages
 https://layerzero.gitbook.io/docs/guides/error-messages/fix-a-storedpayload
+
+
+## DisableMint
+It's absolutely necessary that people can ALWAYS EVER only mint on one root chain, you cannot change this afterwards.
