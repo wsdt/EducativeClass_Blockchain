@@ -10,3 +10,7 @@ Testnet: https://layerzero.gitbook.io/docs/technical-reference/testnet/testnet-a
 
 ## AdapterParams
 Use `0x` not `0x00` or `0x0`
+
+
+## Retry messages
+https://layerzero.gitbook.io/docs/guides/error-messages/fix-a-storedpayload
