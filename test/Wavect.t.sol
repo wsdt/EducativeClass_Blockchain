@@ -612,6 +612,22 @@ contract WavectTest is Test {
         vm.stopPrank();
     }
 
+    function testIsBelowMaxWallet() public {
+        assertTrue(wavectA.isBelowMaxWallet(NONOWNER), "Above maxWallet (1)");
+        vm.prank(NONOWNER);
+        wavectA.mint(NONOWNER_PROOF);
+        assertFalse(wavectA.isBelowMaxWallet(NONOWNER), "Below maxWallet (1)");
+
+        vm.expectRevert("Already minted");
+        vm.prank(NONOWNER);
+        wavectA.mint(NONOWNER_PROOF);
+    }
+
+    function testIsWhitelisted() public {
+        assertTrue(wavectA.isWhitelisted(NONOWNER, NONOWNER_PROOF), "Not Whitelisted (1)");
+        assertFalse(wavectA.isWhitelisted(address(74), FAULTY_PROOF), "Whitelisted (1)");
+    }
+
     event Received(uint);
 
     receive() external payable {

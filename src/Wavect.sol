@@ -76,18 +76,26 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, PullPayment, Pausable, 
         require(SignatureChecker.isValidSignatureNow(owner(), hash, signature_), "Invalid voucher");
         // only owner signatures
 
-        _mint(_msgSender(), tokenID_);
+        _safeMint(_msgSender(), tokenID_);
+    }
+
+    function isBelowMaxWallet(address wallet_) public view returns(bool) {
+        return minted[wallet_] < maxWallet;
+    }
+
+    function isWhitelisted(address wallet_, bytes32[] calldata merkleProof_) public view returns(bool) {
+        bytes32 leaf = keccak256(abi.encodePacked(wallet_));
+        return MerkleProof.verify(merkleProof_, merkleRoot, leaf);
     }
 
     function mint(bytes32[] calldata merkleProof_) payable external whenNotPaused nonReentrant {
-        require(minted[_msgSender()] < maxWallet, "Already minted");
+        require(isBelowMaxWallet(_msgSender()), "Already minted");
         require(msg.value >= mintPrice, "Payment too low");
 
         if (!publicSaleEnabled) {
-            bytes32 leaf = keccak256(abi.encodePacked(_msgSender()));
-            require(MerkleProof.verify(merkleProof_, merkleRoot, leaf), "Invalid proof");
+            require(isWhitelisted(_msgSender(), merkleProof_), "Invalid proof");
         }
-        _mint(_msgSender(), nextToken());
+        _safeMint(_msgSender(), nextToken());
         minted[_msgSender()] += 1;
 
         if (msg.value > mintPrice) {
