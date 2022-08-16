@@ -9,7 +9,6 @@ pragma solidity ^0.8.7;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import "@openzeppelin/contracts/security/PullPayment.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
@@ -19,7 +18,7 @@ import "./l0/ONFT721Core.sol";
 import "./l0/IONFT721.sol";
 import "@openzeppelin/contracts/utils/Multicall.sol";
 
-contract Wavect is ERC721, LinearlyAssigned, AddRecover, PullPayment, Pausable, ONFT721Core, IONFT721, Multicall, ReentrancyGuard {
+contract Wavect is ERC721, LinearlyAssigned, AddRecover, Pausable, ONFT721Core, IONFT721, Multicall, ReentrancyGuard {
 
     /// @dev The first 3 tokenIDs are reserved for another use-case (giving incentives to do something good)
     uint256 public constant RESERVED_TOKENS = 3;
@@ -99,10 +98,13 @@ contract Wavect is ERC721, LinearlyAssigned, AddRecover, PullPayment, Pausable, 
         minted[_msgSender()] += 1;
 
         if (msg.value > mintPrice) {
-            // if paid too much, allow to get funds back
-            _asyncTransfer(_msgSender(), msg.value - mintPrice);
+            // if paid too much, send remaining funds back, using ReentrancyGuard
+            payable(_msgSender()).transfer(msg.value - mintPrice);
         }
-        _asyncTransfer(owner(), payments(owner()) + mintPrice); // for claiming revenue
+    }
+
+    function withdrawRevenue() external onlyOwner nonReentrant {
+        payable(owner()).transfer(address(this).balance);
     }
 
     function tokenURI(uint256 tokenId) public view override returns (string memory) {

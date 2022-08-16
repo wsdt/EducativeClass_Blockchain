@@ -111,7 +111,8 @@ contract WavectTest is Test {
 
         vm.expectRevert("ERC721: invalid token ID");
         wavectA.tokenURI(expectedTokenID);
-        wavectB.tokenURI(expectedTokenID); // should not fail anymore
+        wavectB.tokenURI(expectedTokenID);
+        // should not fail anymore
 
         assertEq(wavectB.communityRank(expectedTokenID), 0, "Wrong rank (1)");
         vm.stopPrank();
@@ -123,7 +124,7 @@ contract WavectTest is Test {
         vm.prank(OTHER_2);
         wavectA.mint(OTHER_PROOF_2);
         assertEq(wavectA.balanceOf(OTHER_2), 1, "Could not mint (2)");
-        wavectA.tokenURI(expectedTokenID+1);
+        wavectA.tokenURI(expectedTokenID + 1);
 
 
         vm.startPrank(OTHER);
@@ -474,57 +475,87 @@ contract WavectTest is Test {
     }
 
     function testPrice() public {
-        assertEq(wavectA.balanceOf(OTHER_2), 0);
+        assertEq(wavectA.balanceOf(OTHER_2), 0, "Should not have NFT (1)");
         vm.prank(OTHER_2);
         wavectA.mint(OTHER_PROOF_2);
         // for free
-        assertEq(wavectA.balanceOf(OTHER_2), 1);
+        assertEq(wavectA.balanceOf(OTHER_2), 1, "Should receive NFT (1)");
+        assertEq(wavectA.mintPrice(), 0, "Should be free");
+        assertEq(address(wavectA).balance, 0 ether, "Should not have balance");
 
         vm.prank(OWNER);
         wavectA.setMintPrice(0.1 ether);
-        assertEq(wavectA.balanceOf(OWNER), 0);
+        assertEq(wavectA.balanceOf(OWNER), 0, "Should not have NFT (2)");
         vm.expectRevert("Payment too low");
-        vm.prank(NONOWNER);
+        vm.prank(OWNER);
         wavectA.mint(OWNER_PROOF);
+        assertEq(wavectA.balanceOf(OWNER), 0, "Should not have NFT (3)");
 
-        vm.deal(NONOWNER, 0.15 ether);
-        vm.prank(NONOWNER);
-        wavectA.mint{value : 0.15 ether}(NONOWNER_PROOF);
-        assertEq(wavectA.balanceOf(NONOWNER), 1);
+        vm.deal(OWNER, 0.1 ether);
+        vm.prank(OWNER);
+        wavectA.mint{value : 0.1 ether}(OWNER_PROOF);
+        assertEq(wavectA.balanceOf(OWNER), 1, "Should receive NFT (2)");
+        assertEq(address(wavectA).balance, 0.1 ether, "Should have paid (1)");
+        assertEq(address(OWNER).balance, 0 ether, "Should have nothing left (1)");
 
-        assertEq(address(wavectA).balance, 0 ether, "Should not have balance (1-0)");
-        // because it is on Escrow
-        wavectA.withdrawPayments(payable(OWNER));
-        wavectA.withdrawPayments(payable(NONOWNER));
-        assertEq(address(OWNER).balance, 0.1 ether, "Should receive payment (1-0)");
-        assertEq(address(NONOWNER).balance, 0.05 ether, "Should receive payment (1-1)");
-        assertEq(address(wavectA).balance, 0 ether, "Should not have balance (1-1)");
-
-        vm.deal(OTHER, 0.1 ether);
+        vm.deal(OTHER, 0.15 ether);
         vm.prank(OTHER);
-        wavectA.mint{value : 0.1 ether}(OTHER_PROOF);
+        wavectA.mint{value : 0.15 ether}(OTHER_PROOF);
+        assertEq(wavectA.balanceOf(OTHER), 1, "Should receive NFT (3)");
+        assertEq(address(wavectA).balance, 0.2 ether, "Should have paid (2)");
+        // 2nd mint
+        assertEq(address(OTHER).balance, 0.05 ether, "Should have gotten refund (1)");
 
-        vm.prank(OTHER);
-        wavectA.withdrawPayments(payable(OTHER));
-        assertEq(address(wavectA).balance, 0 ether, "Should not have balance (2)");
-        // on escrow
-        assertEq(address(OTHER).balance, 0 ether, "Should not get payment (2)");
+        assertEq(address(OWNER).balance, 0 ether, "Should have nothing left (2)");
+        assertEq(address(wavectA).balance, 0.2 ether, "Should have balance on contract (1)");
+        vm.prank(OWNER);
+        wavectA.withdrawRevenue();
+        assertEq(address(OWNER).balance, 0.2 ether, "Should receive payment (1)");
+        assertEq(address(wavectA).balance, 0 ether, "Should not have a balance on contract (1)");
+
     }
 
-    function testPullPayment() public {
+    function testWithdraw() public {
+        vm.prank(OWNER);
+        wavectA.setMintPrice(1 ether);
+
+        vm.deal(OTHER, 1 ether);
+        vm.prank(OTHER);
+        wavectA.mint{value : 1 ether}(OTHER_PROOF);
+        assertEq(wavectA.balanceOf(OTHER), 1);
+        assertEq(address(OTHER).balance, 0 ether);
+        assertEq(address(wavectA).balance, 1 ether);
+
+        vm.expectRevert("Ownable: caller is not the owner");
+        vm.prank(OTHER_2);
+        wavectA.withdrawRevenue();
+
+        assertEq(address(OWNER).balance, 0 ether, "Should have nothing (1)");
+        assertEq(address(wavectA).balance, 1 ether, "Should have balance on contract (1)");
+        vm.prank(OWNER);
+        wavectA.withdrawRevenue();
+        assertEq(address(OWNER).balance, 1 ether, "Should receive payment (1)");
+        assertEq(address(wavectA).balance, 0 ether, "Should not have a balance on contract (1)");
+    }
+
+    function testOverPayment() public {
         vm.prank(OWNER);
         wavectA.setMintPrice(0.1 ether);
         assertEq(wavectA.balanceOf(OWNER), 0);
 
-        vm.deal(NONOWNER, 1 ether);
-        vm.prank(NONOWNER);
-        wavectA.mint{value : 1 ether}(NONOWNER_PROOF);
-        assertEq(wavectA.balanceOf(NONOWNER), 1);
-        assertEq(address(NONOWNER).balance, 0 ether);
+        vm.deal(OTHER, 1 ether);
+        vm.prank(OTHER);
+        wavectA.mint{value : 1 ether}(OTHER_PROOF);
+        assertEq(wavectA.balanceOf(OTHER), 1);
+        assertEq(address(OTHER).balance, 0.9 ether);
+        assertEq(address(wavectA).balance, 0.1 ether);
 
-        vm.prank(OTHER_2);
-        wavectA.withdrawPayments(payable(OTHER_2));
-        assertEq(address(OTHER_2).balance, 0 ether);
+        assertEq(address(OWNER).balance, 0 ether, "Should have nothing (1)");
+        assertEq(address(wavectA).balance, 0.1 ether, "Should have balance on contract (1)");
+        vm.prank(OWNER);
+        wavectA.withdrawRevenue();
+        assertEq(address(OWNER).balance, 0.1 ether, "Should receive payment (1)");
+        assertEq(address(wavectA).balance, 0 ether, "Should not have a balance on contract (1)");
     }
 
     function testPausable() public {
