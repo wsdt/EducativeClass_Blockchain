@@ -1,4 +1,4 @@
-[default]
+[profile.default]
 src = 'src'
 out = 'out'
 libs = ['lib']
@@ -6,13 +6,6 @@ solc = "0.8.7"
 optimizer = true
 optimizer_runs = 10000
 gas_reports = ['*']
-
-[default.optimizer_details]
-constantOptimizer = true
-yul = true
-# this sets the `yulDetails` of the `optimizer_details` for the `default` profile
-[default.optimizer_details.yulDetails]
-stackAllocation = true
-optimizerSteps = 'dhfoDgvulfnTUtnIf'
+etherscan_api_key="4WSWEEHUBEMDB85A9SWF3N3SZ9FN7MWSVD"
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
