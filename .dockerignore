@@ -1,3 +1,7 @@
 cache/
 .idea/
 node_modules/
+out/
+script/
+.github/
+.git/

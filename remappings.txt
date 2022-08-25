@@ -2,4 +2,3 @@
 forge-std/=lib/forge-std/src/
 base64-sol/=lib/base64/
 @openzeppelin-upgradeable/=lib/openzeppelin-contracts-upgradeable/
-@layer-zero/=lib/solidity-examples/
