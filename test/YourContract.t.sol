@@ -12,5 +12,9 @@ contract YourContractTest is Test {
         
     }
 
-    
+    function testInit() public {
+        string memory a = "init";
+        string memory b = "init";
+        assertEq(a, b, "Init failed");
+    }
 }
